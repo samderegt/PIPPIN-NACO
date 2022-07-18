@@ -26,4 +26,5 @@ html_theme_options = {
                       'logo_only': True,
                      }
 
-html_logo = 'figures/logo.png'
+#html_logo = 'figures/logo.png'
+html_logo = 'figures/PIPPIN_logo.pdf'
