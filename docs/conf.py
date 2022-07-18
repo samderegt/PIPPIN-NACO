@@ -27,4 +27,4 @@ html_theme_options = {
                      }
 
 #html_logo = 'figures/logo.png'
-html_logo = 'figures/PIPPIN_logo.pdf'
+html_logo = 'figures/PIPPIN_logo.png'
