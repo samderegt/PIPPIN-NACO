@@ -1,0 +1,4 @@
+build/
+pippin.egg-info/
+pippin/data/
+pippin/__pycache__/
