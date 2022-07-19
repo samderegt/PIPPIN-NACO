@@ -30,6 +30,8 @@ from ast import literal_eval
 
 from tqdm import tqdm
 
+import urllib
+
 from pathlib import Path
 
 ################################################################################
@@ -3626,6 +3628,74 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
     print_and_log('\n\nElapsed time: {}'.format(str(datetime.timedelta(seconds=time.time()-start_time))))
     print_and_log('\n=== Finished running the pipeline ==='.ljust(70, '=') + '\n')
 
+def run_example(path_cwd):
+
+    download_url = 'https://github.com/samderegt/PIPPIN-NACO/blob/master/pippin/example_HD_135344B/'
+
+    path_SCIENCE_dir = os.path.join(path_cwd, 'example_HD_135344B/')
+
+    # Define names of example data
+    files_to_download = ['config.conf',
+                         'NACO.2012-07-25T00:59:39.294.fits',
+                         'NACO.2012-07-25T01:00:28.905.fits',
+                         'NACO.2012-07-25T01:01:18.466.fits',
+                         'NACO.2012-07-25T01:02:21.189.fits',
+                         'DARKs/NACO.2012-07-25T10:37:01.343.fits',
+                         'DARKs/NACO.2012-07-25T10:37:35.379.fits',
+                         'DARKs/NACO.2012-07-25T10:38:09.407.fits',
+                         'FLATs/NACO.2012-07-25T12:35:17.506.fits',
+                         'FLATs/NACO.2012-07-25T12:35:46.300.fits',
+                         'FLATs/NACO.2012-07-25T12:36:15.198.fits',
+                         'FLATs/NACO.2012-07-25T12:36:44.063.fits',
+                         ]
+
+    # Check if data already exists
+    files_exist = np.array([os.path.exists((path_SCIENCE_dir, file_i))
+                             for file_i in files_to_download]).all()
+
+    if not files_exist:
+
+        # Data must be downloaded
+        user_input = input('\nData is not found in the current directory. Proceed to download ... MB? (y/n)')
+
+        if user_input == 'y':
+            print('\nDownloading data.')
+
+            if not os.path.exists(path_SCIENCE_dir):
+                os.makedirs(path_SCIENCE_dir)
+
+            for file_i in tqdm(files_to_download):
+                # Download the data from the git
+                urllib.request.urlretrieve(url_example_data + file_i,
+                                           os.path.join(path_SCIENCE_dir, file_i))
+
+            files_exist = True
+
+        elif user_input == 'n':
+            print_wrap('\nNot downloading data.')
+        else:
+            print_wrap('\nInvalid input.')
+
+    if files_exist:
+
+        # Files exist, run the pipeline
+        path_FLAT_dir = os.path.join(path_SCIENCE_dir, 'FLAT')
+        path_master_BPM_dir = os.path.join(path_SCIENCE_dir, 'master_BPM')
+        path_DARK_dir = os.path.join(path_SCIENCE_dir, 'DARK')
+
+        # Create master FLATs, BPMs and DARKs from the provided paths
+        path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
+        = prepare_calib_files(path_FLAT_dir=path_FLAT_dir,
+                              path_master_BPM_dir=path_master_BPM_dir,
+                              path_DARK_dir=path_DARK_dir
+                              )
+
+        # Run the pipeline
+        run_pipeline(path_SCIENCE_dir=path_SCIENCE_dir,
+                     path_master_FLAT_dir=path_master_FLAT_dir,
+                     path_master_BPM_dir=path_master_BPM_dir,
+                     path_master_DARK_dir=path_master_DARK_dir
+                     )
 """
 def read_command_line_arguments():
 
