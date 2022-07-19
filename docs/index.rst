@@ -8,7 +8,7 @@ PIPPIN (PdI PiPelIne for Naco data) is a pipeline capable of reducing the polari
 
 To reduce polarimetric NACO data, the user can specify a limited number of input parameters and run PIPPIN from a terminal. Subsequently, PIPPIN applies a complete reduction from the raw SCIENCE observations to the final data products in a matter of minutes.
 
-.. figure:: ./figures/figure_gallery.png
+.. figure:: ./figures/figure_homepage.png
     :width: 750px
 
 *Examples of detected polarised light in NACO observations reduced with PIPPIN.*
