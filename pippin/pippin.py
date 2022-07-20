@@ -3641,13 +3641,13 @@ def run_example(path_cwd):
                          'NACO.2012-07-25T01:00:28.905.fits',
                          'NACO.2012-07-25T01:01:18.466.fits',
                          'NACO.2012-07-25T01:02:21.189.fits',
+                         'NACO.2012-07-25T01:47:28.757.fits'
+                         'NACO.2012-07-25T01:48:18.355.fits'
+                         'NACO.2012-07-25T01:49:07.956.fits'
+                         'NACO.2012-07-25T01:50:10.302.fits'
                          'DARKs/NACO.2012-07-25T10:37:01.343.fits',
-                         'DARKs/NACO.2012-07-25T10:37:35.379.fits',
-                         'DARKs/NACO.2012-07-25T10:38:09.407.fits',
                          'FLATs/NACO.2012-07-25T12:35:17.506.fits',
                          'FLATs/NACO.2012-07-25T12:35:46.300.fits',
-                         'FLATs/NACO.2012-07-25T12:36:15.198.fits',
-                         'FLATs/NACO.2012-07-25T12:36:44.063.fits',
                          ]
 
     # Check if data already exists
@@ -3657,7 +3657,7 @@ def run_example(path_cwd):
     if not files_exist:
 
         # Data must be downloaded
-        user_input = input('\nData is not found in the current directory. Proceed to download 47.5 MB? (y/n)\n')
+        user_input = input('\nData is not found in the current directory. Proceed to download 30.6 MB? (y/n)\n')
 
         if user_input == 'y':
             print('\nDownloading data.')
@@ -3671,7 +3671,7 @@ def run_example(path_cwd):
 
             download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin/example_HD_135344B/'
 
-            for file_i in tqdm(files_to_download):
+            for file_i in tqdm(files_to_download, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
                 # Download the data from the git
                 urllib.request.urlretrieve(download_url + file_i,
                                            os.path.join(path_SCIENCE_dir, file_i))
@@ -3679,9 +3679,9 @@ def run_example(path_cwd):
             files_exist = True
 
         elif user_input == 'n':
-            print_wrap('\nNot downloading data.')
+            print('\nNot downloading data.')
         else:
-            print_wrap('\nInvalid input.')
+            print('\nInvalid input.')
 
     if files_exist:
         # Files exist, run the pipeline
