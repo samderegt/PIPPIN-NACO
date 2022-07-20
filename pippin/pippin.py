@@ -3630,9 +3630,10 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
 
 def run_example(path_cwd):
 
-    download_url = 'https://github.com/samderegt/PIPPIN-NACO/blob/master/pippin/example_HD_135344B/'
-
     path_SCIENCE_dir = os.path.join(path_cwd, 'example_HD_135344B/')
+    path_FLAT_dir = os.path.join(path_SCIENCE_dir, 'FLATs')
+    path_master_BPM_dir = os.path.join(path_SCIENCE_dir, 'master_BPMs')
+    path_DARK_dir = os.path.join(path_SCIENCE_dir, 'DARKs')
 
     # Define names of example data
     files_to_download = ['config.conf',
@@ -3650,23 +3651,29 @@ def run_example(path_cwd):
                          ]
 
     # Check if data already exists
-    files_exist = np.array([os.path.exists((path_SCIENCE_dir, file_i))
+    files_exist = np.array([os.path.exists(os.path.join(path_SCIENCE_dir, file_i))
                              for file_i in files_to_download]).all()
 
     if not files_exist:
 
         # Data must be downloaded
-        user_input = input('\nData is not found in the current directory. Proceed to download ... MB? (y/n)')
+        user_input = input('\nData is not found in the current directory. Proceed to download 47.5 MB? (y/n)\n')
 
         if user_input == 'y':
             print('\nDownloading data.')
 
             if not os.path.exists(path_SCIENCE_dir):
                 os.makedirs(path_SCIENCE_dir)
+            if not os.path.exists(path_FLAT_dir):
+                os.makedirs(path_FLAT_dir)
+            if not os.path.exists(path_DARK_dir):
+                os.makedirs(path_DARK_dir)
+
+            download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin/example_HD_135344B/'
 
             for file_i in tqdm(files_to_download):
                 # Download the data from the git
-                urllib.request.urlretrieve(url_example_data + file_i,
+                urllib.request.urlretrieve(download_url + file_i,
                                            os.path.join(path_SCIENCE_dir, file_i))
 
             files_exist = True
@@ -3677,11 +3684,7 @@ def run_example(path_cwd):
             print_wrap('\nInvalid input.')
 
     if files_exist:
-
         # Files exist, run the pipeline
-        path_FLAT_dir = os.path.join(path_SCIENCE_dir, 'FLAT')
-        path_master_BPM_dir = os.path.join(path_SCIENCE_dir, 'master_BPM')
-        path_DARK_dir = os.path.join(path_SCIENCE_dir, 'DARK')
 
         # Create master FLATs, BPMs and DARKs from the provided paths
         path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \

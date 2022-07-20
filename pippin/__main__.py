@@ -1,6 +1,8 @@
 import os
 import argparse, configparser
-from .pippin import run_pipeline, prepare_calib_files
+from .pippin import run_pipeline
+from .pippin import prepare_calib_files
+from .pippin import run_example
 
 def main(args=None):
 
