@@ -19,20 +19,14 @@ from scipy import ndimage, signal
 from scipy.stats import sigmaclip
 from scipy.optimize import minimize
 
-import glob, os, warnings
-import time, datetime
+import urllib
+from pathlib import Path
+import time, datetime, warnings
 
-#from unlzw import unlzw
-
-#import argparse
 import configparser
 from ast import literal_eval
 
 from tqdm import tqdm
-
-import urllib
-
-from pathlib import Path
 
 ################################################################################
 # Auxiliary functions
@@ -90,7 +84,7 @@ def Wollaston_beam_separation(camera, filter=''):
                    'L27':110, 'L54':55}
 
     key_camera = camera
-    key_camera_filter = '{}_{}'.format(camera, filter)
+    key_camera_filter = f'{camera}_{filter}'
 
     if key_camera_filter in all_offsets.keys():
         # Wavelength-specific separation
@@ -247,14 +241,6 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None, siz
         ax[2].set_title('Sky-subtracted image')
         ax[3].set_title('Ord./Ext. beams')
 
-
-        path_to_fig = path_reduced_files_selected[i].split('/')
-        path_to_fig.insert(-1, 'plots')
-        path_to_fig = '/'.join(path_to_fig)
-
-        if not os.path.exists(Path(path_to_fig).parent):
-            os.makedirs(Path(path_to_fig).parent)
-
         if plot_reduced:
             # Plot the raw SCIENCE image
             file_i = path_SCIENCE_files_selected[i]
@@ -320,8 +306,14 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None, siz
                                              edgecolor='C3', facecolor='none')
                 ax_i.add_patch(rect)
 
-        fig.savefig(path_to_fig.replace('_reduced.fits', '.pdf'))#, dpi=200)
-        plt.close() # Clear the axes
+        # Path to figure file. Create directory if it does not exist yet.
+        path_to_fig = Path(path_reduced_files_selected[i].parent, 'plots',
+                           path_reduced_files_selected[i].name.replace('_reduced.fits', '.pdf'))
+        if not path_to_fig.parent.is_dir():
+            Path(path_to_fig.parent).mkdir()
+
+        fig.savefig(path_to_fig)#, dpi=200)
+        plt.close() # Remove from memory
 
 def plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam):
     '''
@@ -352,10 +344,11 @@ def plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam):
     fig.tight_layout()
     #plt.show()
 
-    path_to_fig = path_reduced_files_selected[0].split('/')
-    path_to_fig.insert(-1, 'plots')
-    path_to_fig = '/'.join(path_to_fig)
-    path_to_fig = os.path.join(Path(path_to_fig).parent, 'max_counts.pdf')
+    # Path to figure file. Create directory if it does not exist.
+    path_to_fig = Path(path_reduced_files_selected[0].parent,
+                       'plots', 'max_counts.pdf')
+    if not path_to_fig.parent.is_dir():
+        Path(path_to_fig.parent).mkdir()
 
     plt.savefig(path_to_fig)
     plt.close()
@@ -363,35 +356,6 @@ def plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam):
 ################################################################################
 # Reading and writing files
 ################################################################################
-"""
-def uncompress_FITS_file(path_to_file):
-    '''
-    Uncompress a FITS file using unlzw.
-
-    Input
-    -----
-    path_to_file : str
-        Filename.
-
-    Output
-    ------
-    data : ND-array
-    header : astropy header
-    '''
-
-    # Uncompress the file with unzlw
-    compressed_file = open(path_to_file, mode='rb').read()
-    uncompressed_file = unlzw(compressed_file)
-
-    # Read the header data unit from the uncompressed file
-    hdu = fits.HDUList.fromstring(uncompressed_file)
-
-    # Read the data and header
-    data   = hdu[0].data.astype(np.float32)
-    header = hdu[0].header
-
-    return data, header
-"""
 
 def write_FITS_file(path_to_file, cube, header=None):
     '''
@@ -404,10 +368,6 @@ def write_FITS_file(path_to_file, cube, header=None):
     cube : 3D-array
     header : astropy header
     '''
-
-    # Save as an uncompressed file
-    if path_to_file.endswith('.fits.Z'):
-        path_to_file = path_to_file.replace('.fits.Z', '.fits')
 
     # Save the cube with a header
     fits.writeto(path_to_file, cube.astype(np.float32), header,
@@ -428,14 +388,6 @@ def read_FITS_as_cube(path_to_file):
     header : astropy header
     '''
 
-    """
-    # Read the data from the file
-    if path_to_file.endswith('.fits.Z'):
-        # Uncompress the file
-        data, header = uncompress_FITS_file(path_to_file)
-    else:
-        data, header = fits.getdata(path_to_file, header=True)
-    """
     # Read the data from the file
     data, header = fits.getdata(path_to_file, header=True)
 
@@ -473,17 +425,7 @@ def read_from_FITS_header(path_to_file, key):
         Keyword value.
     '''
 
-    """
-    if path_to_file.endswith('.fits.Z'):
-        # Uncompress the file
-        _, header = uncompress_FITS_file(path_to_file)
-        val = header[key]
-    else:
-        val = fits.getval(path_to_file, key)
-    """
-    val = fits.getval(path_to_file, key)
-
-    return val
+    return fits.getval(path_to_file, key)
 
 def write_config_file(path_config_file):
 
@@ -498,7 +440,7 @@ def write_config_file(path_config_file):
 
     sky_subtraction_options = ['[Sky-subtraction]',
                                'sky_subtraction_method     = dithering-offset',
-                               'sky_subtraction_min_offset = 100'
+                               'sky_subtraction_min_offset = 100',
                                'remove_horizontal_stripes  = False']
     config_file.write('{}\n\n{}\n{}\n{}\n\n\n'.format(*sky_subtraction_options))
 
@@ -507,14 +449,17 @@ def write_config_file(path_config_file):
 
     PDI_options = ['[PDI options]',
                    'size_to_crop         = [120,120]',
-                   'r_inner_IPS          = [0,3,6,9,12,15,18,21,24]',
-                   'r_outer_IPS          = [3,6,9,12,15,18,21,24,27]']
-    config_file.write('{}\n\n{}\n{}\n{}\n\n\n'.format(*PDI_options))
+                   'r_inner_IPS          = [0,3,6,9,12]',
+                   'r_outer_IPS          = [3,6,9,12,15]',
+                   'crosstalk_correction = False',
+                   'minimise_U_phi       = False',
+                   'r_crosstalk          = [7,17]']
+    config_file.write('{}\n\n{}\n{}\n{}\n{}\n{}\n{}\n\n\n'.format(*PDI_options))
 
     # Use the file-path to guess the object's name
-    object_name = path_config_file.split('/')[-2].replace('_', ' ')
+    object_name = path_config_file.parts[-2].replace('_', ' ')
     object_information = ['[Object information]',
-                          'object_name      = {}'.format(object_name),
+                          f'object_name      = {object_name}',
                           'disk_pos_angle   = 0.0',
                           'disk_inclination = 0.0']
     config_file.write('{}\n\n{}\n{}\n{}'.format(*object_information))
@@ -551,11 +496,11 @@ def read_config_file(path_config_file):
     '''
 
     # Check if configuration file exists
-    if not os.path.exists(path_config_file):
+    if not path_config_file.is_file():
         write_config_file(path_config_file)
-        raise IOError('\nConfiguration file {} does not exist. \
-Default configuration file has been created, \
-please confirm that the parameters are appropriate to your needs.\n'.format(path_config_file))
+        raise IOError(f'\nConfiguration file {str(path_config_file)} does not exist. \
+Default configuration file is created, \
+please confirm that the parameters are appropriate for your reduction.\n')
 
     # Read the config file with a configparser object
     config      = configparser.ConfigParser()
@@ -611,9 +556,9 @@ please confirm that the parameters are appropriate to your needs.\n'.format(path
             RA  = query_result['RA']
             DEC = query_result['DEC']
         except TypeError:
-            raise ValueError('\nobject_name \'{}\' not found in the SIMBAD archive'.format(object_name))
+            raise ValueError(f'\nobject_name \'{object_name}\' not found in the SIMBAD archive')
 
-    print_and_log('\n--- Configuration file contents:')
+    print_and_log('\n--- Configuration file parameters:')
     with open(path_config_file, 'r') as file:
         for line in file.readlines():
             print_and_log(line.replace('\n',''))
@@ -1201,7 +1146,7 @@ def fit_beam_centers(method, Wollaston_used, camera_used, filter_used, tied_offs
         has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
     '''
 
-    print_and_log('--- Fitting the beam centers using method \'{}\''.format(method))
+    print_and_log(f'--- Fitting the beam centers using method \'{method}\'')
 
     if method=='single-Moffat' or method=='double-Moffat':
         # Fit a 2D Moffat function
@@ -1283,7 +1228,7 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used):
             beams.append(beams_i)
 
         # Save the calibrated data as a FITS file
-        file_beams = file.replace('_skysub.fits', '_beams.fits')
+        file_beams = Path(str(file).replace('_skysub.fits', '_beams.fits'))
         write_FITS_file(file_beams, beams_i, header=header)
         path_beams_files_selected.append(file_beams)
 
@@ -1448,7 +1393,7 @@ def sky_subtraction_box_median(files, beam_centers, min_offset, remove_horizonta
                                       remove_horizontal_stripes)
 
         # Add filename
-        file_skysub = file.replace('_reduced.fits', '_skysub.fits')
+        file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
         path_skysub_files_selected.append(file_skysub)
 
         # Save the sky-subtracted image to a FITS file
@@ -1558,7 +1503,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
                                       min_offset, y_j, remove_horizontal_stripes)
 
         # Add filename
-        file_skysub = file.replace('_reduced.fits', '_skysub.fits')
+        file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
         path_skysub_files_selected.append(file_skysub)
 
         # Save the sky-subtracted image to a FITS file
@@ -1568,7 +1513,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
         print_and_log('    Sky-subtraction not possible with method \'dithering-offset\', used method \'box-median\'')
 
     if (new_min_offset!=min_offset):
-        print_and_log('    sky_subtraction_min_offset too high, reduced to {} pixels'.format(new_min_offset))
+        print_and_log(f'    sky_subtraction_min_offset too high, reduced to {new_min_offset} pixels')
 
 def sky_subtraction(method, min_offset, beam_centers, HWP_used, Wollaston_used, remove_horizontal_stripes):
     '''
@@ -1591,7 +1536,7 @@ def sky_subtraction(method, min_offset, beam_centers, HWP_used, Wollaston_used, 
         If True, remove the horizontal stripes found in some observations.
     '''
 
-    print_and_log('--- Sky-subtraction using method: \'{}\''.format(method))
+    print_and_log(f'--- Sky-subtraction using method: \'{method}\'')
 
     global path_skysub_files_selected
     path_skysub_files_selected = []
@@ -1690,8 +1635,8 @@ def open_AO_loop(beams, sigma_max=5):
     mask_open_loop_beams = np.ma.mask_or(mask_clip_beams, mask_low_beams)
 
     # Store the open AO loop files in a file
-    path_open_loop_files = os.path.join(Path(path_reduced_files_selected[0]).parent,
-                                        'open_loop_files.txt')
+    path_open_loop_files = Path(path_reduced_files_selected[0].parent,
+                                'open_loop_files.txt')
     open_loop_files = open(path_open_loop_files, 'w+')
     open_loop_files.close()
 
@@ -1699,13 +1644,11 @@ def open_AO_loop(beams, sigma_max=5):
         print_and_log('    Possible open AO-loop image(s) found:')
         for file in path_beams_files_selected[mask_open_loop_beams]:
 
-            print_and_log('    {}'.format(file.split('/')[-1]))
-            # Absolute path
-            file = os.path.abspath(file)
+            print_and_log(f'    {file.name}')
 
-            # Record the paths of open AO-loop images
+            # Save the absolute paths of open AO-loop images
             open_loop_files = open(path_open_loop_files, 'a')
-            open_loop_files.write(file+'\n')
+            open_loop_files.write(str(file.resolve())+'\n')
             open_loop_files.close()
 
     with warnings.catch_warnings():
@@ -1716,25 +1659,52 @@ def open_AO_loop(beams, sigma_max=5):
 # Calibration FLAT, BPM and DARK
 #####################################
 
-def prepare_calib_files(path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
+def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
+    '''
 
-    if path_master_BPM_dir is None:
-        path_master_BPM_dir = path_FLAT_dir.replace('FLAT', 'BPM')
+    Input
+    -----
+    path_SCIENCE_dir : str
+        Path to raw SCIENCE files.
+    path_FLAT_dir : str
+        Path to raw FLAT files.
+    path_master_BPM_dir : str
+        Path to store master BPMs. If None, directory is created in the
+        same parent directory of path_FLAT_dir.
+    path_DARK_dir : str
+        Path to raw DARK files.
 
-    if not os.path.exists(path_master_BPM_dir):
-        os.makedirs(path_master_BPM_dir)
+    Output
+    ------
+    path_master_FLAT_dir : str
+        Path where master FLATs are stored.
+    path_master_BPM_dir : str
+        Path where master BPMs are stored.
+    path_master_DARK_dir : str
+        Path where master DARKs are stored.
+    '''
 
-    path_master_FLAT_dir = os.path.join(path_FLAT_dir, 'master_FLAT/')
-    if not os.path.exists(path_master_FLAT_dir):
-        os.makedirs(path_master_FLAT_dir)
+    # Create the path of the output directory
+    global path_output_dir
+    path_output_dir = Path(path_SCIENCE_dir, 'pipeline_output')
 
-    path_master_DARK_dir = os.path.join(path_DARK_dir, 'master_DARK/')
-    if not os.path.exists(path_master_DARK_dir):
-        os.makedirs(path_master_DARK_dir)
+    if not path_output_dir.is_dir():
+        path_output_dir.mkdir()
 
-    # FLATs --------------------------------------------------------------------
-    path_FLAT_files = glob.glob(os.path.join(path_FLAT_dir, '*.fits'))
+    # Create the log file
+    global path_log_file
+    path_log_file = Path(path_output_dir, 'log.txt')
+    print_and_log('\n=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '=') + '\n', new_file=True)
+    print_and_log(f'Created output directory {str(path_output_dir)}')
+    print_and_log(f'Created log file {str(path_log_file)}')
 
+    print_and_log('\n=== Creating the master calibration files ='.ljust(70, '='))
+
+    # Check if the directories exist and are not empty -------------------------
+    if not path_FLAT_dir.is_dir():
+        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir)} does not exist.')
+
+    path_FLAT_files = sorted(Path(path_FLAT_dir).glob('*.fits'))
     # Ensure that FLATs and DARKs have the same image shapes
     path_FLAT_files = [file_i for file_i in path_FLAT_files
                        if (read_from_FITS_header(file_i, 'NAXIS')==2)
@@ -1743,6 +1713,42 @@ def prepare_calib_files(path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
                       ]
     path_FLAT_files = np.array(path_FLAT_files)
 
+    if len(path_FLAT_files) == 0:
+        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
+
+
+    if not path_DARK_dir.is_dir():
+        raise IOError(f'\nThe DARK directory {str(path_DARK_dir)} does not exist.')
+
+    path_DARK_files = sorted(Path(path_DARK_dir).glob('*.fits'))
+
+    # Ensure that FLATs and DARKs have the same image shapes
+    path_DARK_files = [file_i for file_i in path_DARK_files
+                       if (read_from_FITS_header(file_i, 'NAXIS')==2)
+                       and (read_from_FITS_header(file_i, 'HIERARCH ESO DET WIN NX')==1024)
+                       and (read_from_FITS_header(file_i, 'HIERARCH ESO DET WIN NY')==1024)
+                      ]
+    path_DARK_files = np.array(path_DARK_files)
+
+    if len(path_DARK_files) == 0:
+        raise IOError(f'\nThe DARK directory {str(path_DARK_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
+
+    # Create directories for master calib files --------------------------------
+    if path_master_BPM_dir is None:
+        path_master_BPM_dir = Path(str(path_FLAT_dir).replace('FLAT', 'master_BPM'))
+
+    if not path_master_BPM_dir.is_dir():
+        path_master_BPM_dir.mkdir()
+
+    path_master_FLAT_dir = Path(path_FLAT_dir, 'master_FLAT')
+    if not path_master_FLAT_dir.is_dir():
+        path_master_FLAT_dir.mkdir()
+
+    path_master_DARK_dir = Path(path_DARK_dir, 'master_DARK')
+    if not path_master_DARK_dir.is_dir():
+        path_master_DARK_dir.mkdir()
+
+    # FLATs --------------------------------------------------------------------
     FLAT_cameras, FLAT_filters, FLAT_expTimes, FLAT_lampStatus = [], [], [], []
     for i, path_FLAT_file_i in enumerate(path_FLAT_files):
 
@@ -1776,16 +1782,6 @@ def prepare_calib_files(path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
     FLAT_configs_unique = np.unique(FLAT_configs, axis=0)
 
     # DARKs --------------------------------------------------------------------
-    path_DARK_files = glob.glob(os.path.join(path_DARK_dir, '*.fits'))
-
-    # Ensure that FLATs and DARKs have the same image shapes
-    path_DARK_files = [file_i for file_i in path_DARK_files
-                       if (read_from_FITS_header(file_i, 'NAXIS')==2)
-                       and (read_from_FITS_header(file_i, 'HIERARCH ESO DET WIN NX')==1024)
-                       and (read_from_FITS_header(file_i, 'HIERARCH ESO DET WIN NY')==1024)
-                      ]
-    path_DARK_files = np.array(path_DARK_files)
-
     DARK_cameras, DARK_expTimes = [], []
     for i, path_DARK_file_i in enumerate(path_DARK_files):
 
@@ -1905,13 +1901,13 @@ def prepare_calib_files(path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
 
         # Save the FLAT
         path_FLAT_file_i = f'master_FLAT_{camera_i}_{filter_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
-        path_FLAT_file_i = os.path.join(path_master_FLAT_dir, path_FLAT_file_i)
+        path_FLAT_file_i = Path(path_master_FLAT_dir, path_FLAT_file_i)
         fits.writeto(path_FLAT_file_i, master_FLATs_lamp_on[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
 
         # Save the BPM
         path_BPM_file_i = f'master_BPM_{camera_i}_{filter_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
-        path_BPM_file_i = os.path.join(path_master_BPM_dir, path_BPM_file_i)
+        path_BPM_file_i = Path(path_master_BPM_dir, path_BPM_file_i)
         fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
 
@@ -1921,7 +1917,7 @@ def prepare_calib_files(path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
 
         # Save the DARK
         path_DARK_file_i = f'master_DARK_{camera_i}_NACO.{master_DARKs_header[i]["DATE-OBS"]}.fits'
-        path_DARK_file_i = os.path.join(path_master_DARK_dir, path_DARK_file_i)
+        path_DARK_file_i = Path(path_master_DARK_dir, path_DARK_file_i)
         fits.writeto(path_DARK_file_i, master_DARKs[i].astype(np.float32),
                      header=master_DARKs_header[i], output_verify='silentfix',
                      overwrite=True)
@@ -1971,20 +1967,18 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files, path_BPM_files
             replacing_str = filter_used
         else:
             # Mask was not used, add '_IMAGE_' to FLAT/BPM filenames
-            replacing_str = '{}_IMAGE'.format(filter_used)
+            replacing_str = f'{filter_used}_IMAGE'
 
-        if replacing_str in path_FLAT_files[i]:
+        if replacing_str in path_FLAT_files[i].name:
             # Select only FLATs with the correct filter
             new_path_FLAT_files.append(path_FLAT_files[i])
             new_path_BPM_files.append(path_BPM_files[i])
 
             # Store the observing dates of the FLAT/BPM
-            FLAT_DATE_OBS_i = path_FLAT_files[i].split('NACO.')[-1]
-            FLAT_DATE_OBS_i = FLAT_DATE_OBS_i.replace('.fits', '')
+            FLAT_DATE_OBS_i = str(path_FLAT_files[i]).split('NACO.')[-1].replace('.fits', '')
             FLAT_DATE_OBS.append(Time(FLAT_DATE_OBS_i, format='isot', scale='utc'))
 
-            BPM_DATE_OBS_i = path_BPM_files[i].split('NACO.')[-1]
-            BPM_DATE_OBS_i = BPM_DATE_OBS_i.replace('.fits', '')
+            BPM_DATE_OBS_i = str(path_BPM_files[i]).split('NACO.')[-1].replace('.fits', '')
             BPM_DATE_OBS.append(Time(BPM_DATE_OBS_i, format='isot', scale='utc'))
 
     path_FLAT_files = np.array(new_path_FLAT_files)
@@ -1999,8 +1993,7 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files, path_BPM_files
     # Read the observing dates of the DARK
     DARK_DATE_OBS = []
     for i in range(len(path_DARK_files)):
-        DARK_DATE_OBS_i = path_DARK_files[i].split('NACO.')[-1]
-        DARK_DATE_OBS_i = DARK_DATE_OBS_i.replace('.fits', '')
+        DARK_DATE_OBS_i = str(path_DARK_files[i]).split('NACO.')[-1].replace('.fits', '')
         DARK_DATE_OBS.append(Time(DARK_DATE_OBS_i, format='isot', scale='utc'))
     DARK_DATE_OBS = np.array(DARK_DATE_OBS)
 
@@ -2124,11 +2117,11 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
                       )
 
     # Create output directories
-    path_output_dirs = np.array(['{}{}_{}_{}/'.format(path_output_dir, *x)
+    path_output_dirs = np.array([Path('{}{}_{}_{}'.format(path_output_dir, *x))
                                  for x in unique_obsTypes])
-    for i, x in enumerate(path_output_dirs):
-        if not os.path.exists(x):
-            os.makedirs(x)
+    for x in path_output_dirs:
+        if not x.is_dir():
+            x.mkdir()
 
 def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files, path_DARK_files,
                       window_shape, window_start, y_pixel_range, filter_used, FLAT_pol_mask):
@@ -2167,8 +2160,7 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files, path_
     for i, file in enumerate(tqdm(path_SCIENCE_files, bar_format=progress_bar_format)):
 
         # Reduced file names
-        reduced_file = path_output_dir_selected + \
-                       file.split('/')[-1].replace('.fits', '_reduced.fits')
+        reduced_file = Path(path_output_dir_selected, file.name.replace('.fits', '_reduced.fits'))
         path_reduced_files_selected.append(reduced_file)
 
         # Load the un-calibrated data
@@ -2288,11 +2280,11 @@ def pre_processing(window_shape, window_start, remove_data_products, y_pixel_ran
 
         for file in path_reduced_files_selected:
             # Remove the reduced files
-            os.remove(file)
+            file.unlink()
 
         for file in path_skysub_files_selected:
             # Remove the sky-subtracted files
-            os.remove(file)
+            file.unlink()
 
 ################################################################################
 # Polarimetric differential imaging functions
@@ -2528,7 +2520,7 @@ def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
         print_and_log('    Removed files:')
         for file_i, StokesPara_i in zip(path_beams_files[mask_to_remove],
                                         StokesPara[mask_to_remove]):
-            print_and_log('    {} {}'.format(StokesPara_i, file_i.split('/')[-1]))
+            print_and_log(f'    {StokesPara_i} {file_i.name}')
 
     path_beams_files = path_beams_files[~mask_to_remove]
     HWP_cycle_number = HWP_cycle_number[~mask_to_remove]
@@ -2562,8 +2554,7 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
 
     print_and_log('--- Removing open AO-loop observations')
 
-    path_open_loop_files = os.path.join(Path(path_beams_files[0]).parent,
-                                        'open_loop_files.txt')
+    path_open_loop_files = Path(path_beams_files[0].parent, 'open_loop_files.txt')
     with warnings.catch_warnings():
         warnings.simplefilter('ignore') # Ignore empty-file warnings
         open_loop_files = np.loadtxt(path_open_loop_files, dtype=str, ndmin=1)
@@ -2572,8 +2563,7 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
 
         for open_loop_file in open_loop_files:
 
-            open_loop_file = os.path.join(Path(path_beams_files[0]).parent,
-                                          open_loop_file.split('/')[-1])
+            open_loop_file = Path(path_beams_files[0], Path(open_loop_file).name)
             if open_loop_file in path_beams_files:
 
                 # Determine which entire HWP cycle to remove
@@ -3300,9 +3290,9 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
     '''
 
     # Make the directory for the PDI images
-    path_PDI = os.path.join(path_output_dir, 'PDI/')
-    if not os.path.exists(path_PDI):
-        os.makedirs(path_PDI)
+    path_PDI = Path(path_output_dir, 'PDI')
+    if not path_PDI.is_dir():
+        path_PDI.mkdir()
 
     # Create a header
     hdu = write_header(PDI_frames, object_name)
@@ -3314,7 +3304,7 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
         if im_to_save.ndim==4:
             im_to_save = np.moveaxis(im_to_save, -1, 0)
 
-        write_FITS_file('{}{}.fits'.format(path_PDI, key),
+        write_FITS_file(Path(path_PDI, f'{key}.fits'),
                         im_to_save, header=hdu.header)
 
 def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi, r_crosstalk, HWP_used, Wollaston_used,
@@ -3349,8 +3339,8 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi, r_crosst
     '''
 
     global path_beams_files_selected
-    path_beams_files_selected = glob.glob(path_output_dir_selected + '*_beams.fits')
-    path_beams_files_selected = np.sort(np.array(path_beams_files_selected))
+    path_beams_files_selected = sorted(Path(path_output_dir_selected).glob('*_beams.fits'))
+    path_beams_files_selected = np.array(path_beams_files_selected)
 
     # Assign Stokes parameters to each observation
     StokesPara = assign_Stokes_parameters(path_beams_files_selected, HWP_used, Wollaston_used)
@@ -3446,9 +3436,12 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi, r_crosst
     # Save the data products
     save_PDI_frames(path_output_dir_selected, PDI_frames, object_name)
 
-def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', \
-                 path_master_BPM_dir='../data/master_BPM/', \
-                 path_master_DARK_dir='../data/master_DARK/'):
+def run_pipeline(path_SCIENCE_dir,
+                 path_master_FLAT_dir='../data/master_FLAT/',
+                 path_master_BPM_dir='../data/master_BPM/',
+                 path_master_DARK_dir='../data/master_DARK/',
+                 new_log_file=True,
+                 ):
     '''
     Run the complete pipeline.
 
@@ -3462,11 +3455,13 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
         Path to master-BPM directory.
     path_master_DARK_dir : str
         Path to master-DARK directory.
+    new_log_file : bool
+        If True, create a new log file, otherwise append to the existing file.
     '''
 
     global path_log_file
-    global path_config_file
     global path_output_dir
+    global path_config_file
     global progress_bar_format
 
     # Record the elapsed time
@@ -3476,44 +3471,45 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
     progress_bar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
 
     # Check if the directories exist -------------------------------------------
-    if not os.path.exists(path_SCIENCE_dir):
-        raise IOError('\nThe SCIENCE directory {} does not exist.'.format(path_SCIENCE_dir))
+    if not path_SCIENCE_dir.is_dir():
+        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir)} does not exist.')
 
-    if not os.path.exists(path_master_DARK_dir):
-        raise IOError('\nThe DARK directory {} does not exist.'.format(path_master_DARK_dir))
+    if not path_master_DARK_dir.is_dir():
+        raise IOError(f'\nThe master DARK directory {str(path_master_DARK_dir)} does not exist.')
 
-    if not os.path.exists(path_master_FLAT_dir):
-        raise IOError('\nThe FLAT directory {} does not exist.'.format(path_master_FLAT_dir))
+    if not path_master_FLAT_dir.is_dir():
+        raise IOError(f'\nThe master FLAT directory {str(path_master_FLAT_dir)} does not exist.')
 
-    if not os.path.exists(path_master_BPM_dir):
-        raise IOError('\nThe BPM directory {} does not exist.'.format(path_master_BPM_dir))
+    if not path_master_BPM_dir.is_dir():
+        raise IOError(f'\nThe master BPM directory {str(path_master_BPM_dir)} does not exist.')
 
     # Create the path of the output directory
-    path_output_dir = os.path.join(path_SCIENCE_dir, 'pipeline_output/')
+    path_output_dir = Path(path_SCIENCE_dir, 'pipeline_output')
 
-    if not os.path.exists(path_output_dir):
-        os.makedirs(path_output_dir)
+    if not path_output_dir.is_dir():
+        path_output_dir.mkdir()
 
     # FITS-files in SCIENCE directory, sorted by observing date ----------------
-    path_SCIENCE_files = [*glob.glob(os.path.join(path_SCIENCE_dir, '*.fits')),
-                          *glob.glob(os.path.join(path_SCIENCE_dir, '*.fits.Z'))]
-    path_SCIENCE_files = np.sort(np.array(path_SCIENCE_files))
+    path_SCIENCE_files = sorted(Path(path_SCIENCE_dir).glob('*.fits'))
+    path_SCIENCE_files = np.array(path_SCIENCE_files)
 
     # Check if SCIENCE directory is empty
     if len(path_SCIENCE_files) == 0:
-        raise IOError('\nThe SCIENCE directory {} does not contain FITS-files.'.format(path_SCIENCE_dir))
+        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
 
 
     # Create the log file ------------------------------------------------------
-    path_log_file = path_output_dir + 'log.txt'
-    print_and_log('\n=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '=') + '\n', new_file=True)
-    print_and_log('Created output directory {}'.format(path_output_dir))
-    print_and_log('Created log file {}'.format(path_log_file))
+    path_log_file = Path(path_output_dir, 'log.txt')
+
+    if new_log_file:
+        print_and_log('\n=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '=') + '\n', new_file=new_log_file)
+        print_and_log(f'Created output directory {str(path_output_dir)}')
+        print_and_log(f'Created log file {str(path_log_file)}')
 
 
     # Read the configuration file ----------------------------------------------
-    path_config_file = os.path.join(path_SCIENCE_dir, 'config.conf')
-    print_and_log('Reading configuration file {}'.format(path_config_file))
+    path_config_file = Path(path_SCIENCE_dir, 'config.conf')
+    print_and_log(f'Reading configuration file {str(path_config_file)}')
 
     run_pre_processing, remove_data_products, split_observing_blocks, y_pixel_range, \
     sky_subtraction_method, sky_subtraction_min_offset, remove_horizontal_stripes, \
@@ -3555,15 +3551,15 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
         window_shape = [int(float(OBS_config_i[-4])), int(float(OBS_config_i[-3]))]
         window_start = [int(float(OBS_config_i[-2])), int(float(OBS_config_i[-1]))]
 
-        # Read the FLATs
-        path_FLAT_files = os.path.join(path_master_FLAT_dir, 'master_FLAT_{}*.fits'.format(camera_used))
-        path_FLAT_files = np.sort( np.array(glob.glob(path_FLAT_files)) )
+        # Read the FLATs, BPMs and DARKs
+        path_FLAT_files = np.array(sorted(Path(path_master_FLAT_dir
+                                    ).glob(f'master_FLAT_{camera_used}*.fits')))
         # Read the BPMs
-        path_BPM_files  = os.path.join(path_master_BPM_dir, 'master_BPM_{}*.fits'.format(camera_used))
-        path_BPM_files  = np.sort( np.array(glob.glob(path_BPM_files)) )
+        path_BPM_files  = np.array(sorted(Path(path_master_BPM_dir
+                                    ).glob(f'master_BPM_{camera_used}*.fits')))
         # Read the DARKs
-        path_DARK_files  = os.path.join(path_master_DARK_dir, 'master_DARK_{}*.fits'.format(camera_used))
-        path_DARK_files  = np.sort( np.array(glob.glob(path_DARK_files)) )
+        path_DARK_files = np.array(sorted(Path(path_master_DARK_dir
+                                    ).glob(f'master_DARK_{camera_used}*.fits')))
 
         # Mask all the observations corresponding to this configuration
         SCIENCE_mask = np.prod((OBS_configs==OBS_config_i), axis=1, dtype=bool)
@@ -3630,51 +3626,52 @@ def run_pipeline(path_SCIENCE_dir, path_master_FLAT_dir='../data/master_FLAT/', 
 
 def run_example(path_cwd):
 
-    path_SCIENCE_dir = os.path.join(path_cwd, 'example_HD_135344B/')
-    path_FLAT_dir = os.path.join(path_SCIENCE_dir, 'FLATs')
-    path_master_BPM_dir = os.path.join(path_SCIENCE_dir, 'master_BPMs')
-    path_DARK_dir = os.path.join(path_SCIENCE_dir, 'DARKs')
+    path_SCIENCE_dir    = Path(path_cwd, 'example_HD_135344B')
+    path_FLAT_dir       = Path(path_SCIENCE_dir, 'FLATs')
+    path_master_BPM_dir = Path(path_SCIENCE_dir, 'master_BPMs')
+    path_DARK_dir       = Path(path_SCIENCE_dir, 'DARKs')
 
     # Define names of example data
     files_to_download = ['config.conf',
                          'NACO.2012-07-25T00:59:39.294.fits',
-                         'NACO.2012-07-25T01:00:28.905.fits',
-                         'NACO.2012-07-25T01:01:18.466.fits',
                          'NACO.2012-07-25T01:02:21.189.fits',
-                         'NACO.2012-07-25T01:47:28.757.fits'
-                         'NACO.2012-07-25T01:48:18.355.fits'
-                         'NACO.2012-07-25T01:49:07.956.fits'
-                         'NACO.2012-07-25T01:50:10.302.fits'
+                         'NACO.2012-07-25T01:05:02.698.fits',
+                         'NACO.2012-07-25T01:07:44.231.fits',
+                         'NACO.2012-07-25T02:09:28.406.fits',
+                         'NACO.2012-07-25T02:12:09.554.fits',
+                         'NACO.2012-07-25T02:14:51.024.fits',
+                         'NACO.2012-07-25T02:17:32.490.fits',
                          'DARKs/NACO.2012-07-25T10:37:01.343.fits',
                          'FLATs/NACO.2012-07-25T12:35:17.506.fits',
                          'FLATs/NACO.2012-07-25T12:35:46.300.fits',
                          ]
 
     # Check if data already exists
-    files_exist = np.array([os.path.exists(os.path.join(path_SCIENCE_dir, file_i))
+    files_exist = np.array([Path(path_SCIENCE_dir, file_i).is_file()
                              for file_i in files_to_download]).all()
 
     if not files_exist:
 
         # Data must be downloaded
-        user_input = input('\nData is not found in the current directory. Proceed to download 30.6 MB? (y/n)\n')
+        user_input = input('\nData is not found in the current directory. Proceed to download 48.4 MB? (y/n)\n')
 
         if user_input == 'y':
             print('\nDownloading data.')
 
-            if not os.path.exists(path_SCIENCE_dir):
-                os.makedirs(path_SCIENCE_dir)
-            if not os.path.exists(path_FLAT_dir):
-                os.makedirs(path_FLAT_dir)
-            if not os.path.exists(path_DARK_dir):
-                os.makedirs(path_DARK_dir)
+            if not path_SCIENCE_dir.is_dir():
+                path_SCIENCE_dir.mkdir()
+            if not path_FLAT_dir.is_dir():
+                path_FLAT_dir.mkdir()
+            if not path_DARK_dir.is_dir():
+                path_DARK_dir.mkdir()
 
             download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin/example_HD_135344B/'
 
             for file_i in tqdm(files_to_download, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
                 # Download the data from the git
                 urllib.request.urlretrieve(download_url + file_i,
-                                           os.path.join(path_SCIENCE_dir, file_i))
+                                           str(Path(path_SCIENCE_dir, file_i))
+                                           )
 
             files_exist = True
 
@@ -3688,7 +3685,8 @@ def run_example(path_cwd):
 
         # Create master FLATs, BPMs and DARKs from the provided paths
         path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
-        = prepare_calib_files(path_FLAT_dir=path_FLAT_dir,
+        = prepare_calib_files(path_SCIENCE_dir=path_SCIENCE_dir,
+                              path_FLAT_dir=path_FLAT_dir,
                               path_master_BPM_dir=path_master_BPM_dir,
                               path_DARK_dir=path_DARK_dir
                               )
@@ -3697,39 +3695,6 @@ def run_example(path_cwd):
         run_pipeline(path_SCIENCE_dir=path_SCIENCE_dir,
                      path_master_FLAT_dir=path_master_FLAT_dir,
                      path_master_BPM_dir=path_master_BPM_dir,
-                     path_master_DARK_dir=path_master_DARK_dir
+                     path_master_DARK_dir=path_master_DARK_dir,
+                     new_log_file=False
                      )
-"""
-def read_command_line_arguments():
-
-    parser = argparse.ArgumentParser()
-
-    # All arguments to expect
-    parser.add_argument('--path_SCIENCE_dir', nargs='?', type=str, default='../data/SCIENCE/', \
-                        help='Path to the SCIENCE directory.')
-    parser.add_argument('--path_master_FLAT_dir', nargs='?', type=str, default='../data/master_FLAT/', \
-                        help='Path to the master FLAT directory.')
-    parser.add_argument('--path_master_BPM_dir', nargs='?', type=str, default='../data/master_BPM/', \
-                        help='Path to the master BPM directory.')
-    parser.add_argument('--path_master_DARK_dir', nargs='?', type=str, default='../data/master_DARK/', \
-                        help='Path to the master DARK directory.')
-
-    # Read the arguments in the command line
-    args = parser.parse_args()
-    # Convert to dictionary
-    args_dict = vars(args)
-
-    return args_dict
-
-if __name__ == '__main__':
-
-    # Read the arguments in the command line
-    args_dict = read_command_line_arguments()
-
-    # Run the pipeline
-    run_pipeline(path_SCIENCE_dir=args_dict['path_SCIENCE_dir'],
-                 path_master_FLAT_dir=args_dict['path_master_FLAT_dir'],
-                 path_master_BPM_dir=args_dict['path_master_BPM_dir'],
-                 path_master_DARK_dir=args_dict['path_master_DARK_dir']
-                 )
-"""
