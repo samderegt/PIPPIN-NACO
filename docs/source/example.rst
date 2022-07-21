@@ -12,7 +12,7 @@ To run the example reduction, navigate to any directory in the terminal and type
 PIPPIN attempts to find the required data in your current directory. If these files do not exist, they can be downloaded (with an internet connection) from the `GitHub repository <https://github.com/samderegt/PIPPIN-NACO/tree/master/pippin/example_HD_135344B>`_ (48.4 MB). After successfully downloading the data, which includes SCIENCE, FLAT, and DARK observations, as well as a configuration-file with input parameters (`config.conf`), PIPPIN begins the reduction.
 
 .. note::
-   A discussion of the input parameters in `config.conf` can be found :ref:`here <Configuration file>`_.
+   A discussion of the input parameters in `config.conf` can be found :ref:`here <Configuration file>`.
 
 As the pipeline is running, information is printed in the terminal and stored in the `/example_HD_135344B/pipeline_output/log.txt` file. First, the FLATs and DARKs are median-combined into master FLATs and master DARKs per observation type. In this example, there is only one calibration observation per type. The master FLATs are normalized to unity. Master bad-pixel masks (BPMs) are created from the non-linear pixel response between FLAT observations with the FLAT-lamp on or off.
 
@@ -25,5 +25,5 @@ The PDI technique is applied to the cropped-out beams and a series of correction
    ds9 -tile Q_phi.fits -cube 2 -scale limits -20 50 U_phi.fits -cube 2 -scale limits -7 7 -lock frame wcs -lock colorbar yes -cmap cool
 
 
-.. figure:: ./figures/figure_example_Q_phi_U_phi.png
+.. figure:: ../figures/figure_example_Q_phi_U_phi.png
    :width: 750px
