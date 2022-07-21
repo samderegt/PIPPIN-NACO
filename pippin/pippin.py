@@ -32,6 +32,9 @@ from tqdm import tqdm
 # Auxiliary functions
 ################################################################################
 
+# Setting the length of progress bars
+progress_bar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
+
 def r_phi(im, xc, yc):
     '''
     Get a radius- and angle-array around a center.
@@ -558,7 +561,8 @@ please confirm that the parameters are appropriate for your reduction.\n')
         except TypeError:
             raise ValueError(f'\nobject_name \'{object_name}\' not found in the SIMBAD archive')
 
-    print_and_log('\n--- Configuration file parameters:')
+    print_and_log('')
+    print_and_log('--- Configuration file parameters:')
     with open(path_config_file, 'r') as file:
         for line in file.readlines():
             print_and_log(line.replace('\n',''))
@@ -1694,11 +1698,16 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     # Create the log file
     global path_log_file
     path_log_file = Path(path_output_dir, 'log.txt')
-    print_and_log('\n=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '=') + '\n', new_file=True)
+
+    print_and_log('')
+    print_and_log('=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '='), new_file=True)
+    print_and_log('')
     print_and_log(f'Created output directory {str(path_output_dir)}')
     print_and_log(f'Created log file {str(path_log_file)}')
 
-    print_and_log('\n=== Creating the master calibration files ='.ljust(70, '='))
+    print_and_log('')
+    print_and_log('=== Creating the master calibration files ='.ljust(70, '='))
+    print_and_log('')
 
     # Check if the directories exist and are not empty -------------------------
     if not path_FLAT_dir.is_dir():
@@ -1781,6 +1790,15 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
                               FLAT_expTimes, FLAT_lampStatus)).T
     FLAT_configs_unique = np.unique(FLAT_configs, axis=0)
 
+    print_and_log('--- Unique FLAT types:')
+    print_and_log('Camera'.ljust(10) + 'Filter'.ljust(10) + \
+                  'Exp. Time (s)'.ljust(15) + 'Lamp status'.ljust(15))
+    for (camera_i, filter_i, expTime_i, lampStatus_i) in FLAT_configs_unique:
+        lampStatus_i = 'On' if lampStatus_i=='True' else 'Off'
+
+        print_and_log(camera_i.ljust(10) + filter_i.ljust(10) + \
+                      expTime_i.ljust(15) + lampStatus_i.ljust(15))
+
     # DARKs --------------------------------------------------------------------
     DARK_cameras, DARK_expTimes = [], []
     for i, path_DARK_file_i in enumerate(path_DARK_files):
@@ -1800,6 +1818,12 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     # Determine the unique configurations
     DARK_configs = np.vstack((DARK_cameras, DARK_expTimes)).T
     DARK_configs_unique = np.unique(DARK_configs, axis=0)
+
+    print_and_log('')
+    print_and_log('--- Unique DARK types:')
+    print_and_log('Camera'.ljust(10) + 'Exp. Time (s)'.ljust(15))
+    for (camera_i, expTime_i) in DARK_configs_unique:
+        print_and_log(camera_i.ljust(10) + expTime_i.ljust(15))
 
     # Loop over the unique DARK configurations
     master_DARKs, master_DARKs_header = [], []
@@ -1869,6 +1893,9 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     master_FLATs_lamp_off = master_FLATs_lamp_off[:min([len_lamp_on, len_lamp_off])]
 
     # Bad-pixel masks from non-linear pixel responses --------------------------
+    print_and_log('')
+    print_and_log('--- Creating bad-pixel masks from (non)-linear pixel response between\n' +
+                  '    lamp-off and lamp-on FLATs')
     master_BPMs = np.ones(master_FLATs_lamp_on.shape)
 
     for i in range(len(master_BPMs)):
@@ -1895,6 +1922,15 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
                                          axis=(1,2), keepdims=True)
 
     # Save the FLATs, BPMs and DARKs -------------------------------------------
+
+    print_and_log('')
+    print_and_log(f'Saving master FLATs in directory {path_master_FLAT_dir}')
+    print_and_log(f'Saving master BPMs in directory {path_master_BPM_dir}')
+    print_and_log(f'Saving master DARKs in directory {path_master_DARK_dir}')
+    print_and_log('')
+    print_and_log('')
+
+
     for i in range(len(master_FLATs_lamp_on)):
 
         camera_i, filter_i, _, _ = FLAT_configs_unique[FLAT_configs_unique[:,3]=='True'][i]
@@ -2108,7 +2144,9 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
     obsTypes = np.vstack((OBS_IDs, expTimes, filters)).T
     unique_obsTypes = np.unique(obsTypes, axis=0)
 
-    print_and_log('\n\n--- Unique observation types:')
+    print_and_log('')
+    print_and_log('')
+    print_and_log('--- Unique observation types:')
     print_and_log('OBS ID'.ljust(10) + 'Exp. Time (s)'.ljust(15) + 'Filter'.ljust(10))
     for unique_obsType_i in unique_obsTypes:
         print_and_log(unique_obsType_i[0].ljust(10) + \
@@ -2117,7 +2155,7 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
                       )
 
     # Create output directories
-    path_output_dirs = np.array([Path('{}{}_{}_{}'.format(path_output_dir, *x))
+    path_output_dirs = np.array([Path(path_output_dir, '{}_{}_{}'.format(*x))
                                  for x in unique_obsTypes])
     for x in path_output_dirs:
         if not x.is_dir():
@@ -2153,7 +2191,8 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files, path_
 
     global path_reduced_files_selected
 
-    print_and_log('\n--- Calibrating SCIENCE data')
+    print_and_log('')
+    print_and_log('--- Calibrating SCIENCE data')
 
     path_reduced_files_selected = []
 
@@ -2446,7 +2485,8 @@ def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
         Stokes parameters with incomplete HWP cycles removed.
     '''
 
-    print_and_log('\n--- Removing incomplete HWP cycles')
+    print_and_log('')
+    print_and_log('--- Removing incomplete HWP cycles')
 
     # Save the HWP cycle number for each observation
     HWP_cycle_number = np.ones(len(StokesPara)) * np.nan
@@ -3462,13 +3502,9 @@ def run_pipeline(path_SCIENCE_dir,
     global path_log_file
     global path_output_dir
     global path_config_file
-    global progress_bar_format
 
     # Record the elapsed time
     start_time = time.time()
-
-    # Setting the length of progress bars
-    progress_bar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
 
     # Check if the directories exist -------------------------------------------
     if not path_SCIENCE_dir.is_dir():
@@ -3502,7 +3538,9 @@ def run_pipeline(path_SCIENCE_dir,
     path_log_file = Path(path_output_dir, 'log.txt')
 
     if new_log_file:
-        print_and_log('\n=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '=') + '\n', new_file=new_log_file)
+        print_and_log('')
+        print_and_log('=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ==='.ljust(70, '='), new_file=new_log_file)
+        print_and_log('')
         print_and_log(f'Created output directory {str(path_output_dir)}')
         print_and_log(f'Created log file {str(path_log_file)}')
 
@@ -3583,8 +3621,11 @@ def run_pipeline(path_SCIENCE_dir,
 
             if run_pre_processing:
                 # Run the pre-processing functions
-                print_and_log('\n\n=== Running the pre-processing functions ==='.ljust(71, '='))
-                print_and_log('\n--- Reducing {} observations of type: ({}, {}, {}) ---'.format(
+                print_and_log('')
+                print_and_log('')
+                print_and_log('=== Running the pre-processing functions ==='.ljust(70, '='))
+                print_and_log('')
+                print_and_log('--- Reducing {} observations of type: ({}, {}, {}) ---'.format(
                               mask_selected.sum(), *obsType_selected), pad=70)
 
                 pre_processing(window_shape=window_shape, \
@@ -3609,7 +3650,9 @@ def run_pipeline(path_SCIENCE_dir,
                                )
 
             # Run the polarimetric differential imaging functions
-            print_and_log('\n\n=== Running the PDI functions ==='.ljust(71, '='))
+            print_and_log('')
+            print_and_log('')
+            print_and_log('=== Running the PDI functions ==='.ljust(70, '='))
             PDI(r_inner_IPS=r_inner_IPS, \
                 r_outer_IPS=r_outer_IPS, \
                 crosstalk_correction=crosstalk_correction, \
@@ -3621,8 +3664,14 @@ def run_pipeline(path_SCIENCE_dir,
                 disk_pos_angle=disk_pos_angle, \
                 disk_inclination=disk_inclination)
 
-    print_and_log('\n\nElapsed time: {}'.format(str(datetime.timedelta(seconds=time.time()-start_time))))
-    print_and_log('\n=== Finished running the pipeline ==='.ljust(70, '=') + '\n')
+    print_and_log('')
+    print_and_log('')
+    print_and_log('Elapsed time: {}'.format(str(datetime.timedelta(
+                                                seconds=time.time()-start_time)
+                                                )))
+    print_and_log('')
+    print_and_log('=== Finished running the pipeline ==='.ljust(70, '='))
+    print_and_log('')
 
 def run_example(path_cwd):
 
@@ -3667,7 +3716,7 @@ def run_example(path_cwd):
 
             download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin/example_HD_135344B/'
 
-            for file_i in tqdm(files_to_download, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
+            for file_i in tqdm(files_to_download, bar_format=progress_bar_format):
                 # Download the data from the git
                 urllib.request.urlretrieve(download_url + file_i,
                                            str(Path(path_SCIENCE_dir, file_i))
