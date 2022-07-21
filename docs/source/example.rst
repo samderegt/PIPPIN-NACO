@@ -25,5 +25,5 @@ The PDI technique is applied to the cropped-out beams and a series of correction
    ds9 -tile Q_phi.fits -cube 2 -scale limits -20 50 U_phi.fits -cube 2 -scale limits -7 7 -lock frame wcs -lock colorbar yes -cmap cool
 
 
-.. figure:: ./figures/figure_example_Q_phi.png ./figures/figure_example_U_phi.png
+.. figure:: ./figures/figure_example_Q_phi_U_phi.png
    :width: 750px
