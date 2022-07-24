@@ -2,7 +2,7 @@
 PIPPIN
 ======
 
-PIPPIN (**P**\D\ **I**\  **p**\i\ **p**\el\ **i**\ne for **N**\ACO data) is a pipeline capable of reducing the polarimetric observations made by the VLT/NACO instrument. It applies the Polarimetric Differential Imaging (PDI) technique to separate the polarised, scattered light from the (largely) un-polarised, stellar light. As a result, circumstellar dust can be uncovered.
+**PIPPIN** (**P**\D\ **I**\  **p**\i\ **p**\el\ **i**\ne for **N**\ACO data) is a pipeline capable of reducing the polarimetric observations made by the VLT/NACO instrument. It applies the Polarimetric Differential Imaging (PDI) technique to separate the polarised, scattered light from the (largely) un-polarised, stellar light. As a result, circumstellar dust can be uncovered.
 
 Documentation: https://pippin-naco.readthedocs.io
 
