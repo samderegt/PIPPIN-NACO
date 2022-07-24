@@ -12,9 +12,9 @@ def main(args=None):
     path_cwd = Path.cwd()
 
     # Default master FLATs, BPMs, and DARKs directories
-    path_FLAT_dir       = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT/'
-    path_master_BPM_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM/'
-    path_DARK_dir       = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK/'
+    path_FLAT_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT/'
+    path_BPM_dir  = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM/'
+    path_DARK_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK/'
 
     # All arguments to expect
     parser = argparse.ArgumentParser()
@@ -26,7 +26,7 @@ def main(args=None):
 
     parser.add_argument('--path_FLAT_dir', default=path_FLAT_dir,
                         type=str, help='Path to the FLAT directory.')
-    parser.add_argument('--path_master_BPM_dir', default=path_master_BPM_dir,
+    parser.add_argument('--path_BPM_dir', default=path_BPM_dir,
                         type=str, help='Path to the master BPM directory.')
     parser.add_argument('--path_DARK_dir', default=path_DARK_dir,
                         type=str, help='Path to the DARK directory.')
@@ -46,13 +46,13 @@ def main(args=None):
         path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
         = prepare_calib_files(path_SCIENCE_dir=path_cwd,
                               path_FLAT_dir=Path(args.path_FLAT_dir),
-                              path_master_BPM_dir=Path(args.path_master_BPM_dir),
+                              path_master_BPM_dir=Path(args.path_BPM_dir),
                               path_DARK_dir=Path(args.path_DARK_dir)
                               )
         new_log_file = False
     else:
         path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
-        = Path(args.path_FLAT_dir), Path(args.path_master_BPM_dir), Path(args.path_DARK_dir)
+        = Path(args.path_FLAT_dir), Path(args.path_BPM_dir), Path(args.path_DARK_dir)
 
 
     if args.run_pipeline and not args.run_example:

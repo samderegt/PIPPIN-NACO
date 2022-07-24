@@ -21,7 +21,7 @@ from scipy.optimize import minimize
 
 import urllib
 from pathlib import Path
-import time, datetime, warnings
+import time, datetime, warnings, sys
 
 import configparser
 from ast import literal_eval
@@ -500,10 +500,19 @@ def read_config_file(path_config_file):
 
     # Check if configuration file exists
     if not path_config_file.is_file():
-        write_config_file(path_config_file)
-        raise IOError(f'\nConfiguration file {str(path_config_file)} does not exist. \
-Default configuration file is created, \
-please confirm that the parameters are appropriate for your reduction.\n')
+        user_input = input(f'\nConfiguration file {str(path_config_file)} does not exist. Do you want to create a default configuration file? (y/n)\n')
+
+        if user_input == 'y':
+            # Create a default configuration file
+            write_config_file(path_config_file)
+
+            print_and_log(f'\nA default configuration file {str(path_config_file)} is created, please confirm that the input parameters are appropriate for your reduction.\n')
+
+        else:
+            print_and_log(f'\nConfiguration file {str(path_config_file)} does not exist and a default file is not created.\n')
+
+        # Exit out of the reduction
+        sys.exit()
 
     # Read the config file with a configparser object
     config      = configparser.ConfigParser()
