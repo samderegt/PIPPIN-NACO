@@ -8,4 +8,4 @@ Documentation: https://pippin-naco.readthedocs.io
 
 A comprehensive archive of the PIPPIN-reduced NACO data products can be found at **archive**. There, we have published our reductions of potential young systems observed with NACO's polarimetric configuration **paper-citation**.
 
-If you use PIPPIN or PIPPIN-reduced data products from the archive for your publication, please :ref:`cite our paper <Citing PIPPIN>`.
+If you use PIPPIN or PIPPIN-reduced data products from the archive for your publication, please **cite our paper**.
