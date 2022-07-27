@@ -5,6 +5,7 @@ from .pippin import prepare_calib_files
 from .pippin import run_example
 
 from pathlib import Path
+import warnings
 
 def main(args=None):
 
@@ -12,9 +13,9 @@ def main(args=None):
     path_cwd = Path.cwd()
 
     # Default master FLATs, BPMs, and DARKs directories
-    path_FLAT_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT/'
-    path_BPM_dir  = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM/'
-    path_DARK_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK/'
+    #path_FLAT_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT/'
+    #path_BPM_dir  = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM/'
+    #path_DARK_dir = '/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK/'
 
     # All arguments to expect
     parser = argparse.ArgumentParser()
@@ -24,11 +25,11 @@ def main(args=None):
     parser.add_argument('--run_pipeline', action='store_true')
     parser.add_argument('--prepare_calib_files', nargs='?', default=False, const=True)
 
-    parser.add_argument('--path_FLAT_dir', default=path_FLAT_dir,
+    parser.add_argument('--path_FLAT_dir', #default=path_FLAT_dir,
                         type=str, help='Path to the FLAT directory.')
-    parser.add_argument('--path_BPM_dir', default=path_BPM_dir,
+    parser.add_argument('--path_BPM_dir', #default=path_BPM_dir,
                         type=str, help='Path to the master BPM directory.')
-    parser.add_argument('--path_DARK_dir', default=path_DARK_dir,
+    parser.add_argument('--path_DARK_dir', #default=path_DARK_dir,
                         type=str, help='Path to the DARK directory.')
 
     # Read the arguments in the command line
@@ -56,13 +57,15 @@ def main(args=None):
 
 
     if args.run_pipeline and not args.run_example:
-        # Run the pipeline
-        run_pipeline(path_SCIENCE_dir=path_cwd,
-                     path_master_FLAT_dir=path_master_FLAT_dir,
-                     path_master_BPM_dir=path_master_BPM_dir,
-                     path_master_DARK_dir=path_master_DARK_dir,
-                     new_log_file=new_log_file
-                     )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            # Run the pipeline
+            run_pipeline(path_SCIENCE_dir=path_cwd,
+                         path_master_FLAT_dir=path_master_FLAT_dir,
+                         path_master_BPM_dir=path_master_BPM_dir,
+                         path_master_DARK_dir=path_master_DARK_dir,
+                         new_log_file=new_log_file
+                         )
 
 if __name__ == '__main__':
     main()
