@@ -121,6 +121,8 @@ def assign_Stokes_parameters(files, HWP_used, Wollaston_used):
     StokesPara : 1D-array
         Stokes parameter-strings ('Q+', 'U+', 'Q-', 'U-')
     '''
+    pos_angles = np.array([fits.getheader(x)['ESO ADA POSANG']
+                           for x in files])
 
     def closest_angle(angle_x):
 
@@ -162,13 +164,14 @@ def assign_Stokes_parameters(files, HWP_used, Wollaston_used):
     elif not HWP_used and Wollaston_used:
         # Rotator + Wollaston
 
-        pos_angles = np.zeros(len(files))
-        for i, x in enumerate(files):
-            pos_angle_i = fits.getheader(x)['ESO ADA POSANG']
+        pos_angles = np.array([fits.getheader(x)['ESO ADA POSANG']
+                               for x in files])
 
-            # Closest valid HWP angle
-            #pos_angles[i] = closest_angle(pos_angle_i)
-            pos_angles[i] = pos_angle_i % 180.0
+        # Subtract smallest position angle
+        pos_angles -= pos_angles.min()
+
+        # Closest valid HWP angle
+        pos_angles = np.mod(pos_angles, 180)
 
         Qplus_mask = np.ma.mask_or((pos_angles==0.0), (pos_angles==180.0))
         Umin_mask  = np.ma.mask_or((pos_angles==45.0), (pos_angles==-135.0))
@@ -240,12 +243,6 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
                   fig.add_subplot(gs[:,2]), fig.add_subplot(gs[0,3]),
                   fig.add_subplot(gs[1,3])]
 
-        for ax_i in ax:
-            ax_i.set(xticks=[], yticks=[])
-            ax_i.invert_yaxis()
-
-            ax_i.set_facecolor('w')
-
         ax[0].set_title('Raw SCIENCE image')
         ax[1].set_title('Calibrated image')
         ax[2].set_title('Sky-subtracted image')
@@ -255,40 +252,52 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             # Plot the raw SCIENCE image
             file_i = path_SCIENCE_files_selected[i]
             SCIENCE_i, _ = read_FITS_as_cube(file_i)
-            SCIENCE_i = np.nanmedian(SCIENCE_i, axis=0) # Median-combine the cube
+            SCIENCE_i = np.nanmedian(SCIENCE_i, axis=0) # Median-combine
+
+            yp, xp = np.mgrid[0:SCIENCE_i.shape[0], 0:SCIENCE_i.shape[1]]
 
             vmin, vmax = np.nanmedian(SCIENCE_i), np.nanmax(SCIENCE_i)
             if vmin >= vmax:
                 vmin = 0.1*vmax
-            ax[0].imshow(SCIENCE_i, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+            ax[0].imshow(SCIENCE_i, cmap=cmap, aspect='equal',
+                         norm=LogNorm(vmin=vmin, vmax=vmax))
 
             # Plot the calibrated SCIENCE image
             file_i = path_reduced_files_selected[i]
             reduced_i = fits.getdata(file_i).astype(np.float32)
-            reduced_i = np.nanmedian(reduced_i, axis=0) # Median-combine the cube
+            reduced_i = np.nanmedian(reduced_i, axis=0) # Median-combine
+
+            yp, xp = np.mgrid[0:reduced_i.shape[0], 0:reduced_i.shape[1]]
+
 
             vmin, vmax = np.nanmedian(reduced_i), np.nanmax(reduced_i)
-            ax[1].imshow(reduced_i, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+            ax[1].imshow(reduced_i, cmap=cmap, aspect='equal',
+                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                         norm=LogNorm(vmin=vmin, vmax=vmax))
 
         if plot_skysub:
             # Plot the sky-subtracted image
             file_i = path_skysub_files_selected[i]
             skysub_i = fits.getdata(file_i).astype(np.float32)
-            skysub_i = np.nanmedian(skysub_i, axis=0) # Median-combine the cube
+            skysub_i = np.nanmedian(skysub_i, axis=0) # Median-combine
 
-            ax[2].set_facecolor('w')
+            yp, xp = np.mgrid[0:skysub_i.shape[0], 0:skysub_i.shape[1]]
 
             skysub_i_pos = np.ma.masked_array(skysub_i, mask=~(skysub_i > 0))
             vmin, vmax = np.nanmedian(skysub_i_pos), np.nanmax(skysub_i_pos)
             if vmin >= vmax:
                 vmin = 0.1*vmax
-            ax[2].imshow(skysub_i_pos, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+            ax[2].imshow(skysub_i_pos, cmap=cmap, aspect='equal',
+                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                         norm=LogNorm(vmin=vmin, vmax=vmax))
 
             skysub_i_neg = np.ma.masked_array(skysub_i, mask=~(skysub_i < 0))
             vmin, vmax = np.nanmedian(-skysub_i_neg), np.nanmax(-skysub_i_neg)
             if vmin >= vmax:
                 vmin = 0.1*vmax
-            ax[2].imshow(-skysub_i_neg, cmap=cmap_skysub, norm=LogNorm(vmin=vmin, vmax=vmax))
+            ax[2].imshow(-skysub_i_neg, cmap=cmap_skysub, aspect='equal',
+                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                         norm=LogNorm(vmin=vmin, vmax=vmax))
 
             # Plot the ord./ext. beams
             file_i = path_beams_files_selected[i]
@@ -297,35 +306,48 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             vmin, vmax = np.nanmedian(beams_i), np.nanmax(beams_i)
             if vmin >= vmax:
                 vmin = 0.1*vmax
-            ax[3].imshow(beams_i[0], cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+            ax[3].imshow(beams_i[0], cmap=cmap,
+                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                         norm=LogNorm(vmin=vmin, vmax=vmax))
 
             if beams_i.shape[0] != 1:
-                ax[4].imshow(beams_i[1], cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+                ax[4].imshow(beams_i[1], cmap=cmap,
+                             extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                             norm=LogNorm(vmin=vmin, vmax=vmax))
 
         if beam_centers is not None:
             ord_beam_center_i = np.median(beam_centers[i][:,0,:], axis=0)
             ext_beam_center_i = np.median(beam_centers[i][:,1,:], axis=0)
 
-            # Only show beam center in the raw image if Wollaston_00 was used
-            if Wollaston_45:
-                ax_for_beam_centers = ax[1:3]
-            else:
-                ax_for_beam_centers = ax[:3]
-
-            for ax_i in ax_for_beam_centers:
-                ax_i.scatter(ord_beam_center_i[0], ord_beam_center_i[1], marker='+', color='C3')
-                rect = mpl.patches.Rectangle(xy=(ord_beam_center_i[0]-size_to_crop[1]/2,
-                                                 ord_beam_center_i[1]-size_to_crop[0]/2),
-                                             width=size_to_crop[1], height=size_to_crop[0],
-                                             edgecolor='C3', facecolor='none')
+            for ax_i in ax[1:3]:
+                ax_i.scatter(ord_beam_center_i[0], ord_beam_center_i[1],
+                             marker='+', color='C3')
+                rect = mpl.patches.Rectangle(xy=(ord_beam_center_i[0]-
+                                                 size_to_crop[1]/2,
+                                                 ord_beam_center_i[1]-
+                                                 size_to_crop[0]/2),
+                                             width=size_to_crop[1],
+                                             height=size_to_crop[0],
+                                             edgecolor='C3',
+                                             facecolor='none')
                 ax_i.add_patch(rect)
 
-                ax_i.scatter(ext_beam_center_i[0], ext_beam_center_i[1], marker='x', color='C3')
-                rect = mpl.patches.Rectangle(xy=(ext_beam_center_i[0]-size_to_crop[1]/2,
-                                                 ext_beam_center_i[1]-size_to_crop[0]/2),
-                                             width=size_to_crop[1], height=size_to_crop[0],
-                                             edgecolor='C3', facecolor='none')
+                ax_i.scatter(ext_beam_center_i[0], ext_beam_center_i[1],
+                             marker='x', color='C3')
+                rect = mpl.patches.Rectangle(xy=(ext_beam_center_i[0]-
+                                                 size_to_crop[1]/2,
+                                                 ext_beam_center_i[1]-
+                                                 size_to_crop[0]/2),
+                                             width=size_to_crop[1],
+                                             height=size_to_crop[0],
+                                             edgecolor='C3',
+                                             facecolor='none')
                 ax_i.add_patch(rect)
+
+        for ax_i in ax:
+            ax_i.set(xticks=[], yticks=[])
+            ax_i.set_facecolor('w')
+            ax_i.invert_yaxis()
 
         # Path to figure file. Create directory if it does not exist yet.
         path_to_fig = Path(path_reduced_files_selected[i].parent, 'plots',
@@ -352,16 +374,20 @@ def plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam):
     '''
 
     fig, ax = plt.subplots(figsize=(6,4))
-    ax.hlines(bounds_ord_beam, xmin=0, xmax=len(max_counts)+1, color='r', ls='--')
-    ax.hlines(bounds_ext_beam, xmin=0, xmax=len(max_counts)+1, color='b', ls='--')
+    ax.hlines(bounds_ord_beam, xmin=0, xmax=len(max_counts)+1,
+              color='r', ls='--')
+    ax.hlines(bounds_ext_beam, xmin=0, xmax=len(max_counts)+1,
+              color='b', ls='--')
 
-    ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,0], c='r', label='Ordinary beam')
+    ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,0],
+            c='r', label='Ordinary beam')
     if max_counts.shape[1] != 1:
-        ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,1], c='b', label='Extra-ordinary beam')
+        ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,1],
+                c='b', label='Extra-ordinary beam')
 
     ax.legend(loc='best')
-    ax.set(ylabel='Maximum counts', xlabel='Observation', xlim=(0,len(max_counts)+1),
-           xticks=np.arange(1,len(max_counts)+1,5))
+    ax.set(ylabel='Maximum counts', xlabel='Observation',
+           xlim=(0,len(max_counts)+1), xticks=np.arange(1,len(max_counts)+1,5))
     fig.tight_layout()
     #plt.show()
 
@@ -457,7 +483,8 @@ def write_config_file(path_config_file):
                               'remove_data_products      = True',
                               'split_observing_blocks    = True',
                               'y_pixel_range             = [0,1024]']
-    config_file.write('{}\n\n{}\n{}\n{}\n{}\n\n\n'.format(*pre_processing_options))
+    config_file.write('{}\n\n{}\n{}\n{}\n{}\n\n\n'.format(
+                      *pre_processing_options))
 
     sky_subtraction_options = ['[Sky-subtraction]',
                                'sky_subtraction_method     = dithering-offset',
@@ -465,7 +492,9 @@ def write_config_file(path_config_file):
                                'remove_horizontal_stripes  = False']
     config_file.write('{}\n\n{}\n{}\n{}\n\n\n'.format(*sky_subtraction_options))
 
-    centering_options = ['[Centering]', 'centering_method = single-Moffat', 'tied_offset = False']
+    centering_options = ['[Centering]',
+                         'centering_method = single-Moffat',
+                         'tied_offset = False']
     config_file.write('{}\n\n{}\n{}\n\n\n'.format(*centering_options))
 
     PDI_options = ['[PDI options]',
@@ -518,16 +547,17 @@ def read_config_file(path_config_file):
 
     # Check if configuration file exists
     if not path_config_file.is_file():
-        user_input = input(f'\nConfiguration file {str(path_config_file)} does not exist. Do you want to create a default configuration file? (y/n)\n')
+        string = f'Configuration file {str(path_config_file.resolve())} does not exist. Do you want to create a default configuration file? (y/n)'
+        user_input = input('\n'+textwrap.fill(string, width=80)+'\n')
 
         if user_input == 'y':
             # Create a default configuration file
             write_config_file(path_config_file)
 
-            print_and_log(f'\nA default configuration file {str(path_config_file)} is created, please confirm that the input parameters are appropriate for your reduction.\n')
+            print_and_log(f'\nA default configuration file {str(path_config_file.resolve())} is created, please confirm that the input parameters are appropriate for your reduction.\n')
 
         else:
-            print_and_log(f'\nConfiguration file {str(path_config_file)} does not exist and a default file is not created.\n')
+            print_and_log(f'\nConfiguration file {str(path_config_file.resolve())} does not exist and a default file is not created.\n')
 
         # Exit out of the reduction
         sys.exit()
@@ -537,15 +567,22 @@ def read_config_file(path_config_file):
     config_read = config.read(path_config_file)
 
 
-    run_pre_processing     = literal_eval(config.get('Pre-processing options', 'run_pre_processing'))
-    remove_data_products   = literal_eval(config.get('Pre-processing options', 'remove_data_products'))
-    split_observing_blocks = literal_eval(config.get('Pre-processing options', 'split_observing_blocks'))
-    y_pixel_range          = literal_eval(config.get('Pre-processing options', 'y_pixel_range'))
+    run_pre_processing     = literal_eval(config.get('Pre-processing options',
+                                                     'run_pre_processing'))
+    remove_data_products   = literal_eval(config.get('Pre-processing options',
+                                                     'remove_data_products'))
+    split_observing_blocks = literal_eval(config.get('Pre-processing options',
+                                                     'split_observing_blocks'))
+    y_pixel_range          = literal_eval(config.get('Pre-processing options',
+                                                     'y_pixel_range'))
 
 
-    sky_subtraction_method     = config.get('Sky-subtraction', 'sky_subtraction_method')
-    sky_subtraction_min_offset = float(config.get('Sky-subtraction', 'sky_subtraction_min_offset'))
-    remove_horizontal_stripes  = literal_eval(config.get('Sky-subtraction', 'remove_horizontal_stripes'))
+    sky_subtraction_method     = config.get('Sky-subtraction',
+                                            'sky_subtraction_method')
+    sky_subtraction_min_offset = float(config.get('Sky-subtraction',
+                                            'sky_subtraction_min_offset'))
+    remove_horizontal_stripes  = literal_eval(config.get('Sky-subtraction',
+                                            'remove_horizontal_stripes'))
     # Confirm that the sky-subtraction method is valid
     if sky_subtraction_method not in ['dithering-offset', 'box-median']:
         raise ValueError('\nsky_subtraction_method should be \'dithering-offset\' or \'box-median\'')
@@ -562,11 +599,16 @@ def read_config_file(path_config_file):
         tied_offset = False
 
 
-    size_to_crop         = literal_eval(config.get('PDI options', 'size_to_crop'))
-    r_inner_IPS          = literal_eval(config.get('PDI options', 'r_inner_IPS'))
-    r_outer_IPS          = literal_eval(config.get('PDI options', 'r_outer_IPS'))
-    crosstalk_correction = literal_eval(config.get('PDI options', 'crosstalk_correction'))
-    minimise_U_phi       = literal_eval(config.get('PDI options', 'minimise_U_phi'))
+    size_to_crop         = literal_eval(config.get('PDI options',
+                                                   'size_to_crop'))
+    r_inner_IPS          = literal_eval(config.get('PDI options',
+                                                   'r_inner_IPS'))
+    r_outer_IPS          = literal_eval(config.get('PDI options',
+                                                   'r_outer_IPS'))
+    crosstalk_correction = literal_eval(config.get('PDI options',
+                                                   'crosstalk_correction'))
+    minimise_U_phi       = literal_eval(config.get('PDI options',
+                                                   'minimise_U_phi'))
     if crosstalk_correction or minimise_U_phi:
         r_crosstalk = literal_eval(config.get('PDI options', 'r_crosstalk'))
     else:
@@ -575,7 +617,8 @@ def read_config_file(path_config_file):
 
     object_name      = config.get('Object information', 'object_name')
     disk_pos_angle   = float(config.get('Object information', 'disk_pos_angle'))
-    disk_inclination = float(config.get('Object information', 'disk_inclination'))
+    disk_inclination = float(config.get('Object information',
+                                        'disk_inclination'))
 
     # Query the SIMBAD archive
     query_result = Simbad.query_object(object_name)
@@ -686,10 +729,13 @@ def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
         box[:3,:]  = 1
         box[-3:,:] = 1
 
-        filtered_im = ndimage.minimum_filter(im - mask_approx, footprint=box, mode='constant')
+        filtered_im = ndimage.minimum_filter(im - mask_approx,
+                                             footprint=box, mode='constant')
 
         # x and y values of each pixel
-        y_idx, x_idx = np.unravel_index(np.argmax(filtered_im[Moffat_y_offset//2:-Moffat_y_offset//2]),
+        y_idx, x_idx = np.unravel_index(np.argmax(
+                                            filtered_im[Moffat_y_offset//2:
+                                            -Moffat_y_offset//2]),
                                         filtered_im.shape)
         x0_center = xp[Moffat_y_offset//2:-Moffat_y_offset//2][y_idx, x_idx]
         y0_center = yp[Moffat_y_offset//2:-Moffat_y_offset//2][y_idx, x_idx]
@@ -701,11 +747,12 @@ def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
     else:
         # Estimate one beam location with a filtered image
         # Apply the minimum filter
-        box = np.ones((3,3))
-        filtered_im = ndimage.minimum_filter(im, footprint=box, mode='constant')
+        box = np.ones((5,5))
+        filtered_im = ndimage.median_filter(im, footprint=box, mode='constant')
 
         # x and y coordinates of one beam
-        y_idx, x_idx = np.unravel_index(np.argmax(filtered_im), filtered_im.shape)
+        y_idx, x_idx = np.unravel_index(np.argmax(filtered_im),
+                                        filtered_im.shape)
         x0_1, y0_1 = xp[y_idx, x_idx], yp[y_idx, x_idx]
 
         # Set second beam to NaN-values
@@ -735,17 +782,20 @@ def fit_maximum(Wollaston_used, camera_used, filter_used):
 
     min_cube = 0
     #if filter_used in ['L_prime', 'NB_3.74']:
-    for i, file in enumerate(path_reduced_files_selected):
-        cube = fits.getdata(file).astype(np.float32)
+    if len(path_reduced_files_selected) > 1:
+        for i, file in enumerate(path_reduced_files_selected):
+            cube = fits.getdata(file).astype(np.float32)
 
-        if i == 0:
-            min_cube = np.mean(cube, axis=0, keepdims=True)
-        else:
-            min_cube = np.min(np.array([min_cube[0], np.mean(cube, axis=0)]),
-                              axis=0, keepdims=True)
+            if i == 0:
+                min_cube = np.mean(cube, axis=0, keepdims=True)
+            else:
+                min_cube = np.min(np.array([min_cube[0],
+                                  np.mean(cube, axis=0)]),
+                                  axis=0, keepdims=True)
 
     PSF = []
-    for i, file in enumerate(tqdm(path_reduced_files_selected, bar_format=pbar_format)):
+    for i, file in enumerate(tqdm(path_reduced_files_selected, \
+                                  bar_format=pbar_format)):
 
         # Read the data
         cube = fits.getdata(file).astype(np.float32)
@@ -754,10 +804,12 @@ def fit_maximum(Wollaston_used, camera_used, filter_used):
         yp, xp = np.mgrid[0:cube.shape[1], 0:cube.shape[2]]
 
         # Find one of the PSFs from the first frame in the cube
-        (x0_1, y0_1), (x0_2, y0_2) = fit_initial_guess((cube-min_cube)[0], xp, yp,
-                                                Wollaston_used, camera_used, filter_used)
+        (x0_1, y0_1), (x0_2, y0_2) = fit_initial_guess((cube-min_cube)[0],
+                                                       xp, yp, Wollaston_used,
+                                                       camera_used, filter_used)
 
         # Set the background to 0
+        cube -= min_cube
         cube -= np.nanmedian(cube, axis=(1,2), keepdims=True)
 
         PSF.append(np.ones((len(cube),2,2))*np.nan)
@@ -788,12 +840,14 @@ def fit_maximum(Wollaston_used, camera_used, filter_used):
                 y_min_idx = np.argwhere(yp[:,0]>=y_min)[0,0]
                 y_max_idx = np.argwhere(yp[:,0]<=y_max)[-1,0]
 
-                filtered_im_k = filtered_im[y_min_idx:y_max_idx, x_min_idx:x_max_idx]
+                filtered_im_k = filtered_im[y_min_idx:y_max_idx,
+                                            x_min_idx:x_max_idx]
                 yp_k = yp[y_min_idx:y_max_idx, x_min_idx:x_max_idx]
                 xp_k = xp[y_min_idx:y_max_idx, x_min_idx:x_max_idx]
 
                 # Indices where maximum exists
-                y_idx, x_idx = np.unravel_index(np.argmax(filtered_im_k), filtered_im_k.shape)
+                y_idx, x_idx = np.unravel_index(np.argmax(filtered_im_k),
+                                                filtered_im_k.shape)
 
                 # Record the maximum
                 PSF[-1][j,k,:] = xp_k[y_idx,x_idx], yp_k[y_idx,x_idx]
@@ -802,9 +856,16 @@ def fit_maximum(Wollaston_used, camera_used, filter_used):
             idx_argsort = np.argsort(PSF[-1][j,:,1])
             PSF[-1][j,:,:] = PSF[-1][j,idx_argsort,:]
 
+            """
+            plt.imshow(filtered_im, extent=(xp.min(), xp.max(), yp.max(), yp.min()), norm=LogNorm())
+            plt.scatter(PSF[-1][j,:,0], PSF[-1][j,:,1], c='r')
+            plt.show()
+            """
+
     return PSF
 
-def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used, filter_used, tied_offset):
+def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used,
+                      filter_used, tied_offset):
     '''
     Fit two Moffat functions with the same center to retrieve the PSF center.
     The flat, saturated top of the PSF is simulated by subtracting a Moffat
@@ -888,11 +949,13 @@ def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used, filter_used, tied
 
     # Extra-ordinary beam
     Moffat_0 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=20000, gamma=5,
-                               bounds={'x_0':(x_min, x_max), 'y_0':(y_min_0, y_max_0)},
+                               bounds={'x_0':(x_min, x_max),
+                                       'y_0':(y_min_0, y_max_0)},
                                fixed={'alpha':True, 'gamma':True}
                               )
     Moffat_1 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=1000, gamma=5,
-                               bounds={'x_0':(x_min, x_max), 'y_0':(y_min_0, y_max_0)},
+                               bounds={'x_0':(x_min, x_max),
+                                       'y_0':(y_min_0, y_max_0)},
                                tied={'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0},
                                fixed={'alpha':True, 'gamma':True}
                               )
@@ -908,19 +971,27 @@ def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used, filter_used, tied
         tied_3 = {'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0_offset,
                   'amplitude':tie_to_amp_1, 'gamma':tie_to_gamma_1}
 
-        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=20000, gamma=5,
-                                   bounds={'x_0':(x_min, x_max), 'y_0':(y_min_2, y_max_2)},
-                                   tied=tied_2, fixed={'alpha':True, 'gamma':True}
-                                  )
-    else:
-        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=20000, gamma=5,
-                                   bounds={'x_0':(x_min, x_max), 'y_0':(y_min_2, y_max_2)},
+        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
+                                   amplitude=20000, gamma=5,
+                                   bounds={'x_0':(x_min, x_max),
+                                           'y_0':(y_min_2, y_max_2)},
+                                   tied=tied_2,
                                    fixed={'alpha':True, 'gamma':True}
                                   )
-        tied_3 = {'x_0':tie_to_x_0_2, 'y_0':tie_to_y_0_2} # Tie the (x,y)-coordinates
+    else:
+        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
+                                   amplitude=20000, gamma=5,
+                                   bounds={'x_0':(x_min, x_max),
+                                           'y_0':(y_min_2, y_max_2)},
+                                   fixed={'alpha':True, 'gamma':True}
+                                  )
+        # Tie the (x,y)-coordinates
+        tied_3 = {'x_0':tie_to_x_0_2, 'y_0':tie_to_y_0_2}
 
-    Moffat_3 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=1000, gamma=5,
-                               bounds={'x_0':(x_min, x_max), 'y_0':(y_min_2, y_max_2)},
+    Moffat_3 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
+                               amplitude=1000, gamma=5,
+                               bounds={'x_0':(x_min, x_max),
+                                       'y_0':(y_min_2, y_max_2)},
                                tied=tied_3, fixed={'alpha':True, 'gamma':True}
                               )
     # Double Moffat for the ordinary beam
@@ -941,7 +1012,8 @@ def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used, filter_used, tied
     return np.array([[x_ext, y_ext],
                      [x_ord, y_ord]])
 
-def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext, camera_used, filter_used, tied_offset):
+def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
+                      camera_used, filter_used, tied_offset):
     '''
     Fit a single Moffat function to retrieve a PSF center.
 
@@ -968,7 +1040,8 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext, camera_used, f
         x-, y-coordinate of fitted beam-centers.
     '''
 
-    plt.imshow(im, extent=(xp.min(), xp.max(), yp.max(), yp.min()), norm=LogNorm())
+    plt.imshow(im, extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+               norm=LogNorm())
 
     # Set the separation based on the used camera
     Moffat_y_offset = Wollaston_beam_separation(camera_used, filter_used)
@@ -1012,42 +1085,66 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext, camera_used, f
     y_max_1 = min([yp.max(), y0_ord+10])
 
     # Extra-ordinary beam
-    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=15000, gamma=3, alpha=1,
-                                        bounds={'x_0':(x_min, x_max), 'y_0':(y_min_0, y_max_0),
-                                                'amplitude':(1,40000), 'gamma':(0.1,30),
+    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext,
+                                        amplitude=15000, gamma=3, alpha=1,
+                                        bounds={'x_0':(x_min, x_max),
+                                                'y_0':(y_min_0, y_max_0),
+                                                'amplitude':(1,40000),
+                                                'gamma':(0.1,30),
                                                 'alpha':(0,10)}
                                        )
-    '''
-    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=20000, gamma=5,
-                                        bounds={'x_0':(x_min, x_max), 'y_0':(y_min_0, y_max_0)},
+    """
+    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext,
+                                        amplitude=20000, gamma=5,
+                                        bounds={'x_0':(x_min, x_max),
+                                                'y_0':(y_min_0, y_max_0)},
                                         fixed={'alpha':True, 'gamma':True}
                                        )
-    '''
+    """
     # Ordinary beam
     if tied_offset:
         # Tie the x and y coordinates, amplitudes, and gamma
         tied_1 = {'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0_offset,
                   'amplitude':tie_to_amp_0, 'gamma':tie_to_gamma_0}
-        '''
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=20000, gamma=5,
-                                            bounds={'x_0':(x_min, x_max), 'y_0':(y_min_1, y_max_1)},
-                                            tied=tied_1, fixed={'alpha':True, 'gamma':True}
+        """
+        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
+                                            y_0=y0_ext+Moffat_y_offset,
+                                            amplitude=20000, gamma=5,
+                                            bounds={'x_0':(x_min, x_max),
+                                                    'y_0':(y_min_1, y_max_1)},
+                                            tied=tied_1,
+                                            fixed={'alpha':True,
+                                                   'gamma':True}
                                            )
-        '''
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=15000, gamma=3, alpha=1,
-                                            bounds={'x_0':(x_min, x_max), 'y_0':(y_min_1, y_max_1), 'amplitude':(1,40000),
-                                                    'gamma':(0.1,30), 'alpha':(0,10)}, tied=tied_1
+        """
+        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
+                                            y_0=y0_ext+Moffat_y_offset,
+                                            amplitude=15000, gamma=3, alpha=1,
+                                            bounds={'x_0':(x_min, x_max),
+                                                    'y_0':(y_min_1, y_max_1),
+                                                    'amplitude':(1,40000),
+                                                    'gamma':(0.1,30),
+                                                    'alpha':(0,10)},
+                                            tied=tied_1
                                            )
     else:
-        '''
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=20000, gamma=5,
-                                            bounds={'x_0':(x_min, x_max), 'y_0':(y_min_1, y_max_1)},
+        """
+        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
+                                            y_0=y0_ext+Moffat_y_offset,
+                                            amplitude=20000, gamma=5,
+                                            bounds={'x_0':(x_min, x_max),
+                                                    'y_0':(y_min_1, y_max_1)},
                                             fixed={'alpha':True, 'gamma':True}
                                            )
-        '''
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset, amplitude=15000, gamma=3, alpha=1,
-                                            bounds={'x_0':(x_min, x_max), 'y_0':(y_min_1, y_max_1), 'amplitude':(1,40000),
-                                                    'gamma':(0.1,30), 'alpha':(0,10)},
+        """
+        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
+                                            y_0=y0_ext+Moffat_y_offset,
+                                            amplitude=15000, gamma=3, alpha=1,
+                                            bounds={'x_0':(x_min, x_max),
+                                                    'y_0':(y_min_1, y_max_1),
+                                                    'amplitude':(1,40000),
+                                                    'gamma':(0.1,30),
+                                                    'alpha':(0,10)},
                                            )
 
     # Combine the two beams into a single model
@@ -1057,7 +1154,8 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext, camera_used, f
 
     # Fit the model to the image
     LevMar_fitter = fitting.LevMarLSQFitter()
-    fitted = LevMar_fitter(complete_model, xp, yp, im, maxiter=10000, acc=1e-12)
+    fitted = LevMar_fitter(complete_model, xp, yp, im,
+                           maxiter=10000, acc=1e-12)
 
     # x- and y-coordinates of the beam centers
     if np.isnan(x0_ext) and np.isnan(y0_ext):
@@ -1115,7 +1213,8 @@ def fit_beam_centers_Moffat(method, Wollaston_used, Wollaston_45,
                               axis=0, keepdims=True)
 
     Moffat_PSF = []
-    for i, file in enumerate(tqdm(path_reduced_files_selected, bar_format=pbar_format)):
+    for i, file in enumerate(tqdm(path_reduced_files_selected, \
+                                  bar_format=pbar_format)):
 
         # Read the data
         cube = fits.getdata(file).astype(np.float32)
@@ -1130,8 +1229,10 @@ def fit_beam_centers_Moffat(method, Wollaston_used, Wollaston_45,
             cube[mask] = np.nanmean(cube[~mask])
 
         # Find the PSFs from the first frame in the cube
-        (x0_ord, y0_ord), (x0_ext, y0_ext) = fit_initial_guess((cube-min_cube)[0], xp, yp,
-                                                    Wollaston_used, camera_used, filter_used)
+        (x0_ord, y0_ord), \
+        (x0_ext, y0_ext) \
+        = fit_initial_guess((cube-min_cube)[0], xp, yp, Wollaston_used,
+                            camera_used, filter_used)
 
         # Set the background to 0
         cube -= np.nanmedian(cube, axis=(1,2), keepdims=True)
@@ -1143,12 +1244,19 @@ def fit_beam_centers_Moffat(method, Wollaston_used, Wollaston_45,
             # Fit the (extra)-ordinary beams
             if method=='double-Moffat':
                 # Fit a double-Moffat function to find the location of the beam
-                Moffat_PSF[-1][j,:,:] = fit_double_Moffat(im, xp, yp, x0_ext, y0_ext,
-                                                camera_used, filter_used, tied_offset)
+                Moffat_PSF[-1][j,:,:] = fit_double_Moffat(im, xp, yp,
+                                                          x0_ext, y0_ext,
+                                                          camera_used,
+                                                          filter_used,
+                                                          tied_offset)
             elif method=='single-Moffat':
                 # Fit a single-Moffat
-                Moffat_PSF[-1][j,:,:] = fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
-                                                          camera_used, filter_used, tied_offset)
+                Moffat_PSF[-1][j,:,:] = fit_single_Moffat(im, xp, yp,
+                                                          x0_ord, y0_ord,
+                                                          x0_ext, y0_ext,
+                                                          camera_used,
+                                                          filter_used,
+                                                          tied_offset)
 
             # Sort the PSF locations so that ordinary beam comes first
             idx_argsort = np.argsort(Moffat_PSF[-1][j,:,1])
@@ -1220,7 +1328,8 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
 
     path_beams_files_selected = []
     beams = []
-    for i, file in enumerate(tqdm(path_skysub_files_selected, bar_format=pbar_format)):
+    for i, file in enumerate(tqdm(path_skysub_files_selected, \
+                                  bar_format=pbar_format)):
 
         # Read the data
         cube, header = fits.getdata(file, header=True)
@@ -1318,7 +1427,8 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
 # Sky-subtraction
 ################################################################################
 
-def background_fit(im, offset, next_offset, min_offset, y_ord_ext, remove_horizontal_stripes):
+def background_fit(im, offset, next_offset, min_offset, y_ord_ext,
+                   remove_horizontal_stripes):
     '''
     Fit each row of pixels to approximate a background gradient.
 
@@ -1365,8 +1475,9 @@ def background_fit(im, offset, next_offset, min_offset, y_ord_ext, remove_horizo
         mask_x = mask_x_1 & mask_x_2
 
     # Masks to not fit additional sources
-    _, low, high = sigma_clip(np.ma.masked_array(im, mask=~mask_x), sigma=2.5, maxiters=5,
-                              cenfunc='median', return_bounds=True, axis=1)
+    _, low, high = sigma_clip(np.ma.masked_array(im, mask=~mask_x),
+                              sigma=2.5, maxiters=5, cenfunc='median',
+                              return_bounds=True, axis=1)
     mask_sources = (im > low[:,None]) & (im < high[:,None])
 
     mask_total = mask_x & mask_sources
@@ -1401,12 +1512,14 @@ def background_fit(im, offset, next_offset, min_offset, y_ord_ext, remove_horizo
 
                 # x-coordinates of row
                 mask_rows_flatten = (mask_rows.sum(axis=0) != 0)
-                xp_masked = np.ma.masked_array(xp[i_max], mask=~mask_rows_flatten)
+                xp_masked = np.ma.masked_array(xp[i_max],
+                                               mask=~mask_rows_flatten)
                 xp_masked = np.ma.compressed(xp_masked)
 
                 # Median-combine along vertical axis
                 im_masked = np.ma.masked_array(im, mask=~mask_rows)
-                im_masked_median = np.nanmedian(im_masked[i_min:i_max+1], axis=0)
+                im_masked_median = np.nanmedian(im_masked[i_min:i_max+1],
+                                                axis=0)
                 im_masked_median = im_masked_median[np.isfinite(im_masked_median)]
 
             p = fit_p(p_init, xp_masked, im_masked_median)
@@ -1421,7 +1534,8 @@ def background_fit(im, offset, next_offset, min_offset, y_ord_ext, remove_horizo
 
     return background_model
 
-def sky_subtraction_box_median(files, beam_centers, min_offset, remove_horizontal_stripes):
+def sky_subtraction_box_median(files, beam_centers, min_offset,
+                               remove_horizontal_stripes):
     '''
     Sky-subtraction using two rectangles at an offset.
 
@@ -1438,7 +1552,13 @@ def sky_subtraction_box_median(files, beam_centers, min_offset, remove_horizonta
         If True, remove the horizontal stripes found in some observations.
     '''
 
-    with tqdm(total=len(files), bar_format=pbar_format) as pbar:
+    if len(files) == 1:
+        pbar_disable = True
+    else:
+        pbar_disable = False
+
+    with tqdm(total=len(files), bar_format=pbar_format, \
+              disable=pbar_disable) as pbar:
 
         for i, file in enumerate(files):
 
@@ -1480,7 +1600,8 @@ def sky_subtraction_box_median(files, beam_centers, min_offset, remove_horizonta
             # Save the sky-subtracted image to a FITS file
             write_FITS_file(file_skysub, cube, header=header)
 
-def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used, remove_horizontal_stripes):
+def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
+                              Wollaston_used, remove_horizontal_stripes):
     '''
     Sky-subtraction using the next dithering-offset
     with the same Stokes parameter.
@@ -1500,7 +1621,8 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
         If True, remove the horizontal stripes found in some observations.
     '''
 
-    StokesPara = assign_Stokes_parameters(path_reduced_files_selected, HWP_used, Wollaston_used)
+    StokesPara = assign_Stokes_parameters(path_reduced_files_selected,
+                                          HWP_used, Wollaston_used)
     for i in range(len(StokesPara)):
         StokesPara[i] = StokesPara[i].replace('-', '')
         StokesPara[i] = StokesPara[i].replace('+', '')
@@ -1512,7 +1634,8 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
 
     idx_offsets = np.arange(len(offsets))
 
-    for i, file in enumerate(tqdm(path_reduced_files_selected, bar_format=pbar_format)):
+    for i, file in enumerate(tqdm(path_reduced_files_selected, \
+                                  bar_format=pbar_format)):
 
         # Read the data
         cube, header = fits.getdata(file, header=True)
@@ -1534,7 +1657,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
 
             if (new_min_offset < 60):
                 sky_subtraction_box_median([file], np.array([beam_centers[i]]),
-                                           min_offset, remove_horizontal_stripes)
+                                         min_offset, remove_horizontal_stripes)
                 break
 
         if (new_min_offset < 60):
@@ -1544,9 +1667,11 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
         mask_prev_offsets = (idx_offsets < i)
 
         # Next dithering position with same Stokes parameter
-        mask_next_same = mask_sufficient_offset * mask_next_offsets * mask_StokesPara
+        mask_next_same = mask_sufficient_offset * mask_next_offsets * \
+                         mask_StokesPara
         # Previous dithering position with same Stokes parameter
-        mask_prev_same = mask_sufficient_offset * mask_prev_offsets * mask_StokesPara
+        mask_prev_same = mask_sufficient_offset * mask_prev_offsets * \
+                         mask_StokesPara
 
         # Next dithering position with different Stokes parameter
         mask_next_diff = mask_sufficient_offset * mask_next_offsets
@@ -1580,8 +1705,10 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
         # Remove any leftover background signal with linear fits
         for j in range(len(cube)):
             y_j = beam_centers[i][j,:,1]
-            cube[j] -= background_fit(cube[j], offsets[i], offsets[idx_next_offset],
-                                      min_offset, y_j, remove_horizontal_stripes)
+            cube[j] -= background_fit(cube[j], offsets[i],
+                                      offsets[idx_next_offset],
+                                      min_offset, y_j,
+                                      remove_horizontal_stripes)
 
         # Add filename
         file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
@@ -1596,7 +1723,8 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used
     if (new_min_offset!=min_offset):
         print_and_log(f'    sky_subtraction_min_offset too high, reduced to {new_min_offset} pixels')
 
-def sky_subtraction(method, min_offset, beam_centers, HWP_used, Wollaston_used, remove_horizontal_stripes):
+def sky_subtraction(method, min_offset, beam_centers, HWP_used,
+                    Wollaston_used, remove_horizontal_stripes):
     '''
     Sky-subtraction using a specified method.
 
@@ -1623,11 +1751,11 @@ def sky_subtraction(method, min_offset, beam_centers, HWP_used, Wollaston_used, 
     path_skysub_files_selected = []
 
     if method=='dithering-offset':
-        sky_subtraction_dithering(beam_centers, min_offset, HWP_used, Wollaston_used, \
-                                  remove_horizontal_stripes)
+        sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
+                                  Wollaston_used, remove_horizontal_stripes)
 
     elif method=='box-median':
-        sky_subtraction_box_median(path_reduced_files_selected, beam_centers, \
+        sky_subtraction_box_median(path_reduced_files_selected, beam_centers,
                                    min_offset, remove_horizontal_stripes)
 
     path_skysub_files_selected = np.sort(path_skysub_files_selected)
@@ -1680,9 +1808,11 @@ def open_AO_loop(beams, sigma_max=5):
     max_counts = np.nanmax(beams[:,:,20:-20,20:-20], axis=(2,3))
 
     # Perform an iterative sigma-clipping on the maximum counts
-    filtered_max_counts_ord_beam, low_ord_beam, high_ord_beam = sigma_clip(max_counts[:,0], \
-                                                     sigma_max, maxiters=2, masked=True, \
-                                                     return_bounds=True)
+    filtered_max_counts_ord_beam, \
+    low_ord_beam, \
+    high_ord_beam \
+    = sigma_clip(max_counts[:,0], sigma_max, maxiters=2,
+                 masked=True, return_bounds=True)
     # Lower and upper bounds of the sigma-clip
     bounds_ord_beam    = (low_ord_beam, high_ord_beam)
     bounds_ext_beam    = (-np.inf, np.inf)
@@ -1696,9 +1826,11 @@ def open_AO_loop(beams, sigma_max=5):
 
     if max_counts.shape[1] != 1:
         # Multiple beams, Wollaston was used
-        filtered_max_counts_ext_beam, low_ext_beam, high_ext_beam = sigma_clip(max_counts[:,1], \
-                                                         sigma_max, maxiters=2, masked=True, \
-                                                         return_bounds=True)
+        filtered_max_counts_ext_beam, \
+        low_ext_beam, \
+        high_ext_beam \
+        = sigma_clip(max_counts[:,1], sigma_max, maxiters=2,
+                     masked=True, return_bounds=True)
 
         bounds_ext_beam    = (low_ext_beam, high_ext_beam)
         mask_clip_ext_beam = np.ma.getmask(filtered_max_counts_ext_beam)
@@ -1734,8 +1866,11 @@ def open_AO_loop(beams, sigma_max=5):
 # Calibration FLAT, BPM and DARK
 #####################################
 
-def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, path_DARK_dir):
+def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
+                        path_DARK_dir):
     '''
+    Prepare the master FLATs, DARKs and BPMs from the supplied raw
+    calibration files.
 
     Input
     -----
@@ -1774,8 +1909,11 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     print_and_log('=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ===',
                   new_file=True, pad=80, pad_character='=')
     print_and_log('')
-    print_and_log(f'Created output directory {str(path_output_dir)}')
+    print_and_log('')
+    print_and_log(f'Created output directory {str(path_output_dir.resolve())}')
+    print_and_log('')
     print_and_log(f'Created log file {str(path_log_file)}')
+    print_and_log('')
 
     print_and_log('')
     print_and_log('=== Creating the master calibration files ===',
@@ -1784,40 +1922,41 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
 
     # Check if the directories exist and are not empty -------------------------
     if not path_FLAT_dir.is_dir():
-        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir)} does not exist.')
+        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir.resolve())} does not exist.')
 
     path_FLAT_files = sorted(Path(path_FLAT_dir).glob('*.fits'))
     # Ensure that FLATs and DARKs have the same image shapes
     path_FLAT_files = [file_i for file_i in path_FLAT_files
                        if (read_from_FITS_header(file_i, 'NAXIS')==2)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX')==1024)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY')==1024)
+                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
+                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
                       ]
     path_FLAT_files = np.array(path_FLAT_files)
 
     if len(path_FLAT_files) == 0:
-        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
+        raise IOError(f'\nThe FLAT directory {str(path_FLAT_dir.resolve())} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
 
 
     if not path_DARK_dir.is_dir():
-        raise IOError(f'\nThe DARK directory {str(path_DARK_dir)} does not exist.')
+        raise IOError(f'\nThe DARK directory {str(path_DARK_dir.resolve())} does not exist.')
 
     path_DARK_files = sorted(Path(path_DARK_dir).glob('*.fits'))
 
     # Ensure that FLATs and DARKs have the same image shapes
     path_DARK_files = [file_i for file_i in path_DARK_files
                        if (read_from_FITS_header(file_i, 'NAXIS')==2)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX')==1024)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY')==1024)
+                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
+                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
                       ]
     path_DARK_files = np.array(path_DARK_files)
 
     if len(path_DARK_files) == 0:
-        raise IOError(f'\nThe DARK directory {str(path_DARK_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
+        raise IOError(f'\nThe DARK directory {str(path_DARK_dir.resolve())} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
 
     # Create directories for master calib files --------------------------------
     if path_master_BPM_dir is None:
-        path_master_BPM_dir = Path(str(path_FLAT_dir).replace('FLAT', 'master_BPM'))
+        path_master_BPM_dir = Path(str(path_FLAT_dir).replace('FLAT',
+                                                              'master_BPM'))
 
     if not path_master_BPM_dir.is_dir():
         path_master_BPM_dir.mkdir()
@@ -1831,7 +1970,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
         path_master_DARK_dir.mkdir()
 
     # FLATs --------------------------------------------------------------------
-    FLAT_cameras, FLAT_filters, FLAT_expTimes, FLAT_lampStatus = [], [], [], []
+    FLAT_cameras, FLAT_filters, FLAT_expTimes, FLAT_lampStatus, FLAT_OPTI1_ID \
+    = [], [], [], [], []
     for i, path_FLAT_file_i in enumerate(path_FLAT_files):
 
         # Read the detector keyword
@@ -1840,37 +1980,48 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
         # Read the filter keyword(s)
         filter_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI6 NAME')
         if filter_i == 'empty':
-            filter_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI6 NAME')
+            filter_i = read_from_FITS_header(path_FLAT_file_i,
+                                             'ESO INS OPTI5 NAME')
 
         # Read the exposure time
         expTime_i = read_from_FITS_header(path_FLAT_file_i, 'EXPTIME')
 
         # Read the lamp status (on/off). True if on, False if off.
-        lampStatus_i = (read_from_FITS_header(path_FLAT_file_i, 'ESO INS LAMP2 SET') != 0)
+        lampStatus_i = (read_from_FITS_header(path_FLAT_file_i,
+                                              'ESO INS LAMP2 SET') != 0)
+
+        # Read whether the Wollaston prism was inserted
+        OPTI1_ID_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI1 ID')
 
         FLAT_cameras.append(camera_i)
         FLAT_filters.append(filter_i)
         FLAT_expTimes.append(expTime_i)
         FLAT_lampStatus.append(lampStatus_i)
+        FLAT_OPTI1_ID.append(OPTI1_ID_i)
 
     # Create arrays for easier masking
-    FLAT_cameras, FLAT_filters, FLAT_expTimes, FLAT_lampStatus = \
-    np.array(FLAT_cameras), np.array(FLAT_filters), \
-    np.array(FLAT_expTimes), np.array(FLAT_lampStatus)
+    FLAT_cameras    = np.array(FLAT_cameras)
+    FLAT_filters    = np.array(FLAT_filters)
+    FLAT_expTimes   = np.array(FLAT_expTimes)
+    FLAT_lampStatus = np.array(FLAT_lampStatus)
+    FLAT_OPTI1_ID   = np.array(FLAT_OPTI1_ID)
 
     # Determine the unique configurations
-    FLAT_configs = np.vstack((FLAT_cameras, FLAT_filters,
-                              FLAT_expTimes, FLAT_lampStatus)).T
+    FLAT_configs = np.vstack((FLAT_cameras, FLAT_filters, FLAT_expTimes,
+                              FLAT_lampStatus, FLAT_OPTI1_ID)).T
     FLAT_configs_unique = np.unique(FLAT_configs, axis=0)
 
     print_and_log('--- Unique FLAT types:')
     print_and_log('Camera'.ljust(10) + 'Filter'.ljust(10) + \
-                  'Exp. Time (s)'.ljust(15) + 'Lamp status'.ljust(15))
-    for (camera_i, filter_i, expTime_i, lampStatus_i) in FLAT_configs_unique:
+                  'Exp. Time (s)'.ljust(15) + 'Lamp status'.ljust(15) + \
+                  'OPTI1 ID'.ljust(15))
+    for (camera_i, filter_i, expTime_i, lampStatus_i, OPTI1_ID_i) in \
+        FLAT_configs_unique:
         lampStatus_i = 'On' if lampStatus_i=='True' else 'Off'
 
         print_and_log(camera_i.ljust(10) + filter_i.ljust(10) + \
-                      expTime_i.ljust(15) + lampStatus_i.ljust(15))
+                      expTime_i.ljust(15) + lampStatus_i.ljust(15) + \
+                      OPTI1_ID_i.ljust(15))
 
     # DARKs --------------------------------------------------------------------
     DARK_cameras, DARK_expTimes = [], []
@@ -1886,7 +2037,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
         DARK_expTimes.append(expTime_i)
 
     # Create arrays for easier masking
-    DARK_cameras, DARK_expTimes = np.array(DARK_cameras), np.array(DARK_expTimes)
+    DARK_cameras  = np.array(DARK_cameras)
+    DARK_expTimes = np.array(DARK_expTimes)
 
     # Determine the unique configurations
     DARK_configs = np.vstack((DARK_cameras, DARK_expTimes)).T
@@ -1903,7 +2055,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     for DARK_config_i in DARK_configs_unique:
 
         # Read the files with the same configuration
-        mask_i = np.prod((DARK_configs == DARK_config_i), axis=1, dtype=np.bool)
+        mask_i = np.prod((DARK_configs == DARK_config_i),
+                         axis=1, dtype=np.bool)
         DARKs_i = []
         for path_DARK_file_j in path_DARK_files[mask_i]:
 
@@ -1921,20 +2074,27 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     master_DARKs = np.array(master_DARKs)
 
     # Combine the FLATs and DARKs ----------------------------------------------
-    master_FLATs_lamp_on, master_FLATs_lamp_on_header, master_FLATs_lamp_off = [], [], []
+    master_FLATs_lamp_on, master_FLATs_lamp_off = [], []
+    master_FLATs_lamp_on_header = []
     for FLAT_config_i in FLAT_configs_unique:
 
-        camera_i, filter_i, expTime_i, lampStatus_i = FLAT_config_i
+        camera_i, filter_i, expTime_i, lampStatus_i, OPTI1_ID_i = FLAT_config_i
 
         # Master DARK should use the same camera
         master_DARK_mask_i = (DARK_configs_unique[:,0]==camera_i)
+
+        if master_DARK_mask_i.sum() == 0:
+            raise IOError(f'\nMaster FLAT has no corresponding master DARK with detector \'{camera_i}\'.')
+
         expTime_ratio = np.float32(expTime_i) / \
                         np.float32(DARK_configs_unique[:,1][master_DARK_mask_i])
-        master_DARK_i = master_DARKs[master_DARK_mask_i] * expTime_ratio[:,None,None]
+        master_DARK_i = master_DARKs[master_DARK_mask_i] * \
+                        expTime_ratio[:,None,None]
         master_DARK_i = np.nanmedian(master_DARK_i, axis=0)
 
         # Read the files with the same configuration
-        FLAT_mask_i = np.prod((FLAT_configs == FLAT_config_i), axis=1, dtype=np.bool)
+        FLAT_mask_i = np.prod((FLAT_configs == FLAT_config_i),
+                              axis=1, dtype=np.bool)
         FLATs_i = []
         for path_FLAT_file_j in path_FLAT_files[FLAT_mask_i]:
 
@@ -1961,9 +2121,12 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
     master_FLATs_lamp_off = np.array(master_FLATs_lamp_off)
 
     # In case there are fewer/more lamp-on than lamp-off observations
-    len_lamp_on, len_lamp_off = len(master_FLATs_lamp_on), len(master_FLATs_lamp_off)
-    master_FLATs_lamp_on  = master_FLATs_lamp_on[:min([len_lamp_on, len_lamp_off])]
-    master_FLATs_lamp_off = master_FLATs_lamp_off[:min([len_lamp_on, len_lamp_off])]
+    len_lamp_on  = len(master_FLATs_lamp_on)
+    len_lamp_off = len(master_FLATs_lamp_off)
+    master_FLATs_lamp_on  = master_FLATs_lamp_on[:min([len_lamp_on,
+                                                       len_lamp_off])]
+    master_FLATs_lamp_off = master_FLATs_lamp_off[:min([len_lamp_on,
+                                                        len_lamp_off])]
 
     # Bad-pixel masks from non-linear pixel responses --------------------------
     print_and_log('')
@@ -2005,19 +2168,39 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
 
     for i in range(len(master_FLATs_lamp_on)):
 
-        camera_i, filter_i, _, _ = FLAT_configs_unique[FLAT_configs_unique[:,3]=='True'][i]
+        camera_i, filter_i, _, _, OPTI1_ID_i \
+        = FLAT_configs_unique[FLAT_configs_unique[:,3]=='True'][i]
+
+        if OPTI1_ID_i in ['FLM_13', 'FLM_27', 'FLM_54']:
+            OPTI1_ID_i = '_FLM'
+        else:
+            OPTI1_ID_i = ''
 
         # Save the FLAT
-        path_FLAT_file_i = f'master_FLAT_{camera_i}_{filter_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
+        path_FLAT_file_i = f'master_FLAT_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
         path_FLAT_file_i = Path(path_master_FLAT_dir, path_FLAT_file_i)
-        fits.writeto(path_FLAT_file_i, master_FLATs_lamp_on[i].astype(np.float32),
+        fits.writeto(path_FLAT_file_i,
+                     master_FLATs_lamp_on[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
 
+        ############
+        path_FLAT_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT', f'master_FLAT_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
+        fits.writeto(path_FLAT_file_i,
+                     master_FLATs_lamp_on[i].astype(np.float32),
+                     output_verify='silentfix', overwrite=True)
+        ############
+
         # Save the BPM
-        path_BPM_file_i = f'master_BPM_{camera_i}_{filter_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
+        path_BPM_file_i = f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
         path_BPM_file_i = Path(path_master_BPM_dir, path_BPM_file_i)
         fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
+
+        ############
+        path_BPM_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM', f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
+        fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
+                     output_verify='silentfix', overwrite=True)
+        ############
 
     for i in range(len(master_DARKs)):
 
@@ -2030,9 +2213,16 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir, pa
                      header=master_DARKs_header[i], output_verify='silentfix',
                      overwrite=True)
 
+        ############
+        path_DARK_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK', f'master_DARK_{camera_i}_NACO.{master_DARKs_header[i]["DATE-OBS"]}.fits')
+        fits.writeto(path_DARK_file_i, master_DARKs[i].astype(np.float32),
+                     header=master_DARKs_header[i], output_verify='silentfix', overwrite=True)
+        ############
+
     return path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir
 
-def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files, path_BPM_files, path_DARK_files, FLAT_pol_mask):
+def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
+                      path_BPM_files, path_DARK_files, FLAT_pol_mask):
     '''
     Read master FLAT, bad-pixel mask and DARK closest to the observing date.
 
@@ -2074,8 +2264,8 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files, path_BPM_files
             # Polarimetric mask was used
             replacing_str = filter_used
         else:
-            # Mask was not used, add '_IMAGE_' to FLAT/BPM filenames
-            replacing_str = f'{filter_used}_IMAGE'
+            # Mask was not used, add '_FLM_' to FLAT/BPM filenames
+            replacing_str = f'{filter_used}_FLM'
 
         if replacing_str in path_FLAT_files[i].name:
             # Select only FLATs with the correct filter
@@ -2084,10 +2274,14 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files, path_BPM_files
 
             # Store the observing dates of the FLAT/BPM
             FLAT_DATE_OBS_i = str(path_FLAT_files[i]).split('NACO.')[-1].replace('.fits', '')
-            FLAT_DATE_OBS.append(Time(FLAT_DATE_OBS_i, format='isot', scale='utc'))
+            FLAT_DATE_OBS.append(Time(FLAT_DATE_OBS_i,
+                                      format='isot', scale='utc')
+                                )
 
             BPM_DATE_OBS_i = str(path_BPM_files[i]).split('NACO.')[-1].replace('.fits', '')
-            BPM_DATE_OBS.append(Time(BPM_DATE_OBS_i, format='isot', scale='utc'))
+            BPM_DATE_OBS.append(Time(BPM_DATE_OBS_i,
+                                      format='isot', scale='utc')
+                               )
 
     path_FLAT_files = np.array(new_path_FLAT_files)
     path_BPM_files  = np.array(new_path_BPM_files)
@@ -2172,7 +2366,8 @@ def reshape_master_CALIB(data, window_shape, window_start):
 # SCIENCE calibration
 #####################################
 
-def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
+def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks, HWP_used,
+                         Wollaston_used, Wollaston_45, camera_used):
     '''
     Read the unique observation types. Observations are separated
     by OBS IDs, exposure times, filters.
@@ -2184,6 +2379,14 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
     split_observing_blocks : bool
         If True, split the observing blocks by OBS IDs,
         else combine all observing blocks.
+    HWP_used : bool
+        If True, HWP was used, else position angle was changed.
+    Wollaston_used : bool
+        If True, Wollaston was used, else wiregrid was used.
+    Wollaston_45 : bool
+        If True, Wollaston_45 was used, else Wollaston_00 was used.
+    camera_used : str
+        Camera that was used ('S13','S27','L27','S54','L54').
     '''
 
     global obsTypes
@@ -2219,9 +2422,22 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks):
     print_and_log('')
     print_and_log('')
     print_and_log('--- Unique observation types:')
-    print_and_log('OBS ID'.ljust(10) + 'Exp. Time (s)'.ljust(15) + 'Filter'.ljust(10))
+    print_and_log('HWP'.ljust(10) + 'Wollaston'.ljust(15) + \
+                  'Camera'.ljust(10) + 'OBS ID'.ljust(15) + \
+                  'Exp. Time (s)'.ljust(15) + 'Filter'.ljust(10))
+
+    if not Wollaston_used:
+        Wollaston = 'False'
+    elif Wollaston_used and Wollaston_45:
+        Wollaston = 'Wollaston_45'
+    elif Wollaston_used and not Wollaston_45:
+        Wollaston = 'Wollaston_00'
+
     for unique_obsType_i in unique_obsTypes:
-        print_and_log(unique_obsType_i[0].ljust(10) + \
+        print_and_log(str(HWP_used).ljust(10) + \
+                      Wollaston.ljust(15) + \
+                      camera_used.ljust(10) + \
+                      unique_obsType_i[0].ljust(15) + \
                       unique_obsType_i[1].ljust(15) + \
                       unique_obsType_i[2].ljust(10)
                       )
@@ -2274,16 +2490,22 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files,
     for i, file in enumerate(tqdm(path_SCIENCE_files, bar_format=pbar_format)):
 
         # Reduced file names
-        reduced_file = Path(path_output_dir_selected, file.name.replace('.fits', '_reduced.fits'))
+        reduced_file = Path(path_output_dir_selected,
+                            file.name.replace('.fits', '_reduced.fits'))
         path_reduced_files_selected.append(reduced_file)
 
         # Load the un-calibrated data
         cube, header = read_FITS_as_cube(file)
 
         # Read the corresponding master FLAT, BPM and DARK
-        master_FLAT, master_BPM, master_DARK, DARK_expTime, SCIENCE_expTime \
-        = read_master_CALIB(file, filter_used, path_FLAT_files, \
-                            path_BPM_files, path_DARK_files, FLAT_pol_mask)
+        master_FLAT, \
+        master_BPM, \
+        master_DARK, \
+        DARK_expTime, \
+        SCIENCE_expTime \
+        = read_master_CALIB(file, filter_used, path_FLAT_files,
+                            path_BPM_files, path_DARK_files,
+                            FLAT_pol_mask)
 
         # Reshape the master FLAT, BPM and DARK
         if (window_shape == [1024,1024]) or (window_shape == [1026,1024]):
@@ -2294,9 +2516,12 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files,
             master_DARK = master_DARK[:,y_pixel_range[0]:y_pixel_range[1]]
 
         else:
-            master_FLAT = reshape_master_CALIB(master_FLAT, cube.shape[1:], window_start)
-            master_BPM  = reshape_master_CALIB(master_BPM, cube.shape[1:], window_start)
-            master_DARK = reshape_master_CALIB(master_DARK, cube.shape[1:], window_start)
+            master_FLAT = reshape_master_CALIB(master_FLAT, cube.shape[1:],
+                                               window_start)
+            master_BPM  = reshape_master_CALIB(master_BPM, cube.shape[1:],
+                                               window_start)
+            master_DARK = reshape_master_CALIB(master_DARK, cube.shape[1:],
+                                               window_start)
 
         # DARK-subtract the SCIENCE image
         cube -= master_DARK * SCIENCE_expTime/DARK_expTime
@@ -2655,14 +2880,22 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
 
     if open_loop_files.ndim != 0:
 
-        for open_loop_file in open_loop_files:
+        if len(open_loop_files):
+            print_and_log('    Removed files:')
 
-            open_loop_file = Path(path_beams_files[0], Path(open_loop_file).name)
-            if open_loop_file in path_beams_files:
+        for file_i in open_loop_files:
+            file_i = Path(file_i)
+
+            if file_i in path_beams_files:
 
                 # Determine which entire HWP cycle to remove
-                idx_file = np.argwhere(path_beams_files == open_loop_file).flatten()
-                mask_to_remove = (HWP_cycle_number == HWP_cycle_number[idx_file])
+                idx_file_i = np.argwhere(path_beams_files == file_i).flatten()
+                mask_to_remove = (HWP_cycle_number == HWP_cycle_number[idx_file_i])
+
+                for file_i, StokesPara_i in \
+                                        zip(path_beams_files[mask_to_remove], \
+                                        StokesPara[mask_to_remove]):
+                    print_and_log(f'    {StokesPara_i} {file_i.name}')
 
                 # Remove the entire HWP cycle
                 path_beams_files = path_beams_files[~mask_to_remove]
@@ -2711,9 +2944,11 @@ def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
     beams : 4D-array
         Array of beam-images.
     r_inner_IPS : list
-        Inner radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Inner radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     r_outer_IPS : list
-        Outer radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Outer radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
 
     Output
     ------
@@ -2866,10 +3101,11 @@ def individual_Stokes_frames(beams):
 
     return ind_I, ind_QU
 
-def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crosstalk):
+def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction,
+                      r_crosstalk, Wollaston_used):
     '''
     Apply the double-difference method to
-    remove instrumental polarization.
+    remove instrumental polarisation.
 
     Input
     -----
@@ -2883,6 +3119,8 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
         Correct for crosstalk_correction if True.
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
+    Wollaston_used : bool
+        If True, Wollaston was used, else wiregrid was used.
 
     Output
     ------
@@ -2892,7 +3130,10 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
 
     print_and_log('--- Double-difference method to remove instrumental polarisation (IP)')
 
-    if len(np.unique(StokesPara))==4:
+    mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
+    mask_U = np.ma.mask_or((StokesPara=='U+'), (StokesPara=='U-'))
+
+    if len(np.unique(StokesPara)) == 4:
         # Stokes Q, U images
         Q = 1/2 * (ind_QU[StokesPara=='Q+'] - ind_QU[StokesPara=='Q-'])
         U = 1/2 * (ind_QU[StokesPara=='U+'] - ind_QU[StokesPara=='U-'])
@@ -2901,12 +3142,9 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
         I_Q = 1/2 * (ind_I[StokesPara=='Q+'] + ind_I[StokesPara=='Q-'])
         I_U = 1/2 * (ind_I[StokesPara=='U+'] + ind_I[StokesPara=='U-'])
 
-    elif len(np.unique(StokesPara))>=2:
+    elif mask_Q.any() and mask_U.any():
 
         # Stokes Q, U images
-        mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
-        mask_U = np.ma.mask_or((StokesPara=='U+'), (StokesPara=='U-'))
-
         Q = ind_QU[mask_Q]
         U = ind_QU[mask_U]
 
@@ -2918,8 +3156,26 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
         I_Q = ind_I[mask_Q]
         I_U = ind_I[mask_U]
 
+    else:
+
+        # Stokes Q, U images
+        Q, U, I_Q, I_U = None, None, None, None
+
+        if mask_Q.any():
+            Q = ind_QU[mask_Q]
+            Q[StokesPara[mask_Q]=='Q-'] *= -1 # Flip the sign
+
+            I_Q = ind_I[mask_Q]
+
+        elif mask_U.any():
+            U = ind_QU[mask_U]
+            U[StokesPara[mask_U]=='U-'] *= -1 # Flip the sign
+
+            I_U = ind_I[mask_U]
+
+
     # Determine the U crosstalk-efficiency and correct
-    if crosstalk_correction:
+    if crosstalk_correction and (Q is not None) and (U is not None):
 
         print_and_log('--- Correcting for the crosstalk-efficiency of U')
 
@@ -2932,8 +3188,9 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
         # Loop over the ord./ext. flux-scaling annuli
         e_U_all = []
         for j in range(Q.shape[-1]):
-            e_U = fit_U_efficiency(median_Q[:,:,j], median_U[:,:,j], median_I_Q[:,:,j],
-                               median_I_U[:,:,j], r_crosstalk)
+            e_U = fit_U_efficiency(median_Q[:,:,j], median_U[:,:,j],
+                                   median_I_Q[:,:,j], median_I_U[:,:,j],
+                                   r_crosstalk)
             e_U_all.append(e_U)
 
         e_U_all = np.array(e_U_all)
@@ -2943,41 +3200,53 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction, r_crossta
         U   /= e_U_all[None,None,None,:]
         I_U /= e_U_all[None,None,None,:]
 
-    # Total intensity images
-    I = 1/2 * (I_Q + I_U)
-
     # Save the Q, U and I images to a dictionary
     PDI_frames = {'cube_Q': Q,
                   'cube_U': U,
                   'cube_I_Q': I_Q,
                   'cube_I_U': I_U,
-                  'cube_I': I,
-
-                  'median_Q': np.nanmedian(Q, axis=0, keepdims=True),
-                  'median_U': np.nanmedian(U, axis=0, keepdims=True),
-                  'median_I_Q': np.nanmedian(I_Q, axis=0, keepdims=True),
-                  'median_I_U': np.nanmedian(I_U, axis=0, keepdims=True),
-                  'median_I': np.nanmedian(I, axis=0, keepdims=True),
                   }
+    if (Q is not None) and (U is not None):
+        # Total intensity images
+        I = 1/2 * (I_Q + I_U)
+        PDI_frames['cube_I']   = I
+        PDI_frames['median_I'] = np.nanmedian(I, axis=0, keepdims=True)
 
-    # Save the individual Q+- and U+- measurements
-    for QU_sel in ['Q+', 'Q-', 'U+', 'U-']:
+    if (Q is not None):
+        PDI_frames['median_Q']   = np.nanmedian(Q, axis=0, keepdims=True)
+        PDI_frames['median_I_Q'] = np.nanmedian(I_Q, axis=0, keepdims=True)
+
+    if (U is not None):
+        PDI_frames['median_U']   = np.nanmedian(U, axis=0, keepdims=True)
+        PDI_frames['median_I_U'] = np.nanmedian(I_U, axis=0, keepdims=True)
+
+    for QU_sel, I_deg in zip(['Q+', 'Q-', 'U+', 'U-'], [0, 90, 45, 135]):
+
         if np.any(StokesPara == QU_sel):
-            PDI_frames[f'cube_I_{QU_sel}'] = ind_I[StokesPara==QU_sel]
-            PDI_frames[f'median_I_{QU_sel}'] \
-            = np.nanmedian(ind_I[StokesPara==QU_sel],
-                           axis=0, keepdims=True)
+            if Wollaston_used:
+                # Save the individual Q+- and U+- measurements
+                PDI_frames[f'cube_I_{QU_sel}'] = ind_I[StokesPara==QU_sel]
+                PDI_frames[f'median_I_{QU_sel}'] \
+                = np.nanmedian(ind_I[StokesPara==QU_sel],
+                               axis=0, keepdims=True)
 
-            PDI_frames[f'cube_{QU_sel}'] = ind_QU[StokesPara==QU_sel]
-            PDI_frames[f'median_{QU_sel}'] \
-            = np.nanmedian(ind_QU[StokesPara==QU_sel],
-                           axis=0, keepdims=True)
+                PDI_frames[f'cube_{QU_sel}'] = ind_QU[StokesPara==QU_sel]
+                PDI_frames[f'median_{QU_sel}'] \
+                = np.nanmedian(ind_QU[StokesPara==QU_sel],
+                               axis=0, keepdims=True)
+
+            else:
+                # Save the measurements
+                PDI_frames[f'cube_I_{I_deg}_deg'] = ind_I[StokesPara==QU_sel]
+                PDI_frames[f'median_I_{I_deg}_deg'] \
+                = np.nanmedian(ind_I[StokesPara==QU_sel],
+                               axis=0, keepdims=True)
 
     return PDI_frames
 
 def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     '''
-    Apply instrumental polarization subtraction by using annuli.
+    Apply instrumental polarisation subtraction by using annuli.
 
     Input
     -----
@@ -2986,9 +3255,11 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     spm : 2D-array
         Saturated pixel mask.
     r_inner_IPS : list
-        Inner radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Inner radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     r_outer_IPS : list
-        Outer radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Outer radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     Q : 4D-array
         Stokes Q observation.
     U : 4D-array
@@ -3013,8 +3284,8 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     for i in range(len(Q)):
 
         Q_IPS_i, U_IPS_i = [], []
-        for j, r_inner, r_outer in zip(range(len(r_inner_IPS)), r_inner_IPS, \
-                                       r_outer_IPS):
+        for j, r_inner, r_outer in zip(range(len(r_inner_IPS)), \
+                                       r_inner_IPS, r_outer_IPS):
 
             if Q.ndim == 3:
                 # Apply saturated-pixels mask before IPS
@@ -3031,7 +3302,7 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
                 I_U_j = I_U[i,:,:,j] * spm
                 I_j = I[i,:,:,j] * spm
 
-            # Multiple annuli for instrumental polarization correction
+            # Multiple annuli for instrumental polarisation correction
             mask_annulus = (r >= r_inner) & (r <= r_outer)
 
             # Median Q/I within the annulus
@@ -3082,7 +3353,7 @@ def final_Stokes_frames(r, phi, PDI_frames, minimise_U_phi, r_crosstalk):
     # De-projected radius
     PDI_frames['r'] = r[None,:,:]
 
-    # Polarized intensity image
+    # polarised intensity image
     PDI_frames['P_I'] = np.sqrt(PDI_frames['median_Q_IPS']**2 + \
                                 PDI_frames['median_U_IPS']**2)
 
@@ -3117,9 +3388,11 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
     spm : 2D-array
         Saturated pixel mask.
     r_inner_IPS : list
-        Inner radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Inner radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     r_outer_IPS : list
-        Outer radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Outer radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     PDI_frames : dict
         Dictionary of images resulting from PDI.
 
@@ -3162,7 +3435,6 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
         mask_Q_i = ~np.isnan(Q_i)
         mask_U_i = ~np.isnan(U_i)
 
-        print(Q_extended.shape, Q_i.shape, mask_Q_i.shape)
         # Flip the signal of Q- and U- observations
         Q_extended[mask_Q_i] += float(pm_Q_i+'1') * Q_i[mask_Q_i]
         U_extended[mask_U_i] += float(pm_U_i+'1') * U_i[mask_U_i]
@@ -3190,8 +3462,8 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
     PDI_frames['median_I_extended'] = np.sqrt(I_extended)
 
     # PI of overlapping Q and U signal
-    PDI_frames['P_I_extended'] = np.sqrt(PDI_frames['median_Q_IPS_extended']**2+
-                                         PDI_frames['median_U_IPS_extended']**2)
+    PDI_frames['P_I_extended'] = (PDI_frames['median_Q_IPS_extended']**2 + \
+                                  PDI_frames['median_U_IPS_extended']**2)**(1/2)
 
     return PDI_frames
 
@@ -3245,7 +3517,11 @@ def write_header_coordinates(file, header, PDI_frames, object_name):
     header['CRVAL2'] = coord_fk5.dec.degree[0]
 
     # Reference pixel, first pixel has index 1
-    im_shape = PDI_frames['median_I'].shape[1:]
+    if PDI_frames['median_Q'] is not None:
+        im_shape = PDI_frames['median_Q'].shape[1:]
+    elif PDI_frames['median_U'] is not None:
+        im_shape = PDI_frames['median_U'].shape[1:]
+
     header['CRPIX1'] = im_shape[1]/2
     header['CRPIX2'] = im_shape[0]/2
 
@@ -3357,8 +3633,8 @@ def write_header(PDI_frames, object_name):
 
     hdu.header['DATE REDUCED'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
-    hdu.header = write_header_coordinates(path_beams_files_selected[0], hdu.header,
-                                          PDI_frames, object_name)
+    hdu.header = write_header_coordinates(path_beams_files_selected[0],
+                                          hdu.header, PDI_frames, object_name)
 
     return hdu
 
@@ -3388,11 +3664,13 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
     for key in PDI_frames.keys():
 
         im_to_save = PDI_frames[key]
-        if im_to_save.ndim==4:
-            im_to_save = np.moveaxis(im_to_save, -1, 0)
+        if im_to_save is not None:
 
-        write_FITS_file(Path(path_PDI, f'{key}.fits'),
-                        im_to_save, header=hdu.header)
+            if im_to_save.ndim==4:
+                im_to_save = np.moveaxis(im_to_save, -1, 0)
+
+            write_FITS_file(Path(path_PDI, f'{key}.fits'),
+                            im_to_save, header=hdu.header)
 
 def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         r_crosstalk, HWP_used, Wollaston_used, object_name, disk_pos_angle,
@@ -3403,9 +3681,11 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     Input
     -----
     r_inner_IPS : list
-        Inner radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Inner radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     r_outer_IPS : list
-        Outer radii of the annuli used in IP-subtraction and ord./ext. re-scaling.
+        Outer radii of the annuli used in IP-subtraction and ord./ext.
+        re-scaling.
     crosstalk_correction : bool
         Correct for crosstalk_correction if True.
     minimise_U_phi : bool
@@ -3427,32 +3707,48 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     '''
 
     global path_beams_files_selected
-    path_beams_files_selected \
-    = sorted(Path(path_output_dir_selected).glob('*_beams.fits'))
+    path_beams_files_selected = sorted(
+                        Path(path_output_dir_selected).glob('*_beams.fits')
+                        )
     path_beams_files_selected = np.array(path_beams_files_selected)
 
     # Assign Stokes parameters to each observation
     StokesPara = assign_Stokes_parameters(path_beams_files_selected,
                                           HWP_used, Wollaston_used)
 
-    # Remove any incomplete HWP cycles
-    path_beams_files_selected, HWP_cycle_number, StokesPara \
-    = remove_incomplete_HWP_cycles(path_beams_files_selected, StokesPara)
+    mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
+    mask_U = np.ma.mask_or((StokesPara=='U+'), (StokesPara=='U-'))
 
-    if len(StokesPara)==0:
-        # There are no complete cycles, continue to next output directory
-        print_and_log('No complete HWP cycles')
-        return
+    if mask_Q.any() and mask_U.any():
 
-    # Remove HWP cycles where open AO-loops were found
-    path_beams_files_selected, HWP_cycle_number, StokesPara \
-    = remove_open_AO_loop(path_beams_files_selected, HWP_cycle_number,
-                          StokesPara)
+        # Remove any incomplete HWP cycles
+        path_beams_files_selected, \
+        HWP_cycle_number, \
+        StokesPara \
+        = remove_incomplete_HWP_cycles(path_beams_files_selected,
+                                       StokesPara)
 
-    if len(StokesPara)==0:
-        # There are no complete cycles, continue to next output directory
-        print_and_log('No complete HWP cycles')
-        return
+        if len(StokesPara)==0:
+            # There are no complete cycles, continue to next output directory
+            print_and_log('No complete HWP cycles')
+            return
+
+        # Remove HWP cycles where open AO-loops were found
+        path_beams_files_selected, \
+        HWP_cycle_number, \
+        StokesPara \
+        = remove_open_AO_loop(path_beams_files_selected,
+                              HWP_cycle_number,
+                              StokesPara)
+
+        if len(StokesPara)==0:
+            # There are no complete cycles, continue to next output directory
+            print_and_log('No complete HWP cycles')
+            return
+
+    else:
+
+        print_and_log('No complete HWP cycles, creating images of the available Stokes components')
 
     # Load the data
     beams = np.array([fits.getdata(x).astype(np.float32) \
@@ -3487,46 +3783,54 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
 
     # Double-difference
     PDI_frames = double_difference(ind_I, ind_QU, StokesPara,
-                                   crosstalk_correction, r_crosstalk)
+                                   crosstalk_correction, r_crosstalk,
+                                   Wollaston_used)
 
-    # Instrumental polarization correction
-    #PDI_frames = IPS(r, spm, PDI_frames, r_inner_IPS, r_outer_IPS)
-    print_and_log('--- IP-subtraction (IPS) using annuli with unpolarised stellar signal')
-    PDI_frames['median_Q_IPS'], PDI_frames['median_U_IPS'] \
-    = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-          PDI_frames['cube_Q'], PDI_frames['cube_U'],
-          PDI_frames['cube_I_Q'], PDI_frames['cube_I_U'],
-          PDI_frames['cube_I'])
+    if (PDI_frames['cube_Q'] is not None) and \
+       (PDI_frames['cube_U'] is not None):
 
-    # Final Stokes frames
-    PDI_frames, phi = final_Stokes_frames(r, phi, PDI_frames,
-                                          minimise_U_phi,
-                                          r_crosstalk)
+        # Instrumental polarisation correction
+        print_and_log('--- IP-subtraction (IPS) using annuli with unpolarised stellar signal')
+        PDI_frames['median_Q_IPS'], \
+        PDI_frames['median_U_IPS'] \
+        = IPS(r, spm, r_inner_IPS, r_outer_IPS,
+              Q=PDI_frames['cube_Q'], U=PDI_frames['cube_U'],
+              I_Q=PDI_frames['cube_I_Q'], I_U=PDI_frames['cube_I_U'],
+              I=PDI_frames['cube_I'])
 
-    # Retrieve the de-projected radius
-    yp, xp = np.mgrid[0:r.shape[0], 0:r.shape[1]]
-    r_deprojected = deprojected_radius(xp, yp, (r.shape[1]-1)/2,
-                                       (r.shape[0]-1)/2, disk_pos_angle,
-                                       disk_inclination)
-    r_deprojected = r_deprojected.astype(np.float32)
+        # Final Stokes frames
+        PDI_frames, phi = final_Stokes_frames(r, phi, PDI_frames,
+                                              minimise_U_phi,
+                                              r_crosstalk)
 
-    # r^2-scaled Stokes parameters
-    PDI_frames['P_I_r2']   = PDI_frames['P_I'] * r_deprojected**2
-    PDI_frames['Q_phi_r2'] = PDI_frames['Q_phi'] * r_deprojected**2
-    PDI_frames['U_phi_r2'] = PDI_frames['U_phi'] * r_deprojected**2
+        # Retrieve the de-projected radius
+        yp, xp = np.mgrid[0:r.shape[0], 0:r.shape[1]]
+        r_deprojected = deprojected_radius(xp, yp,
+                                           (r.shape[1]-1)/2,
+                                           (r.shape[0]-1)/2,
+                                           disk_pos_angle,
+                                           disk_inclination)
+        r_deprojected = r_deprojected.astype(np.float32)
 
-    if not HWP_used and Wollaston_used:
-        # r^2-scaled extended PI image
-        PDI_frames = extended_Stokes_frames(r, spm, r_inner_IPS,
-                                            r_outer_IPS, PDI_frames)
-        PDI_frames['P_I_extended_r2'] = PDI_frames['P_I_extended'] * r_deprojected**2
+        # r^2-scaled Stokes parameters
+        PDI_frames['P_I_r2']   = PDI_frames['P_I'] * r_deprojected**2
+        PDI_frames['Q_phi_r2'] = PDI_frames['Q_phi'] * r_deprojected**2
+        PDI_frames['U_phi_r2'] = PDI_frames['U_phi'] * r_deprojected**2
+
+        if not HWP_used and Wollaston_used:
+            # r^2-scaled extended PI image
+            PDI_frames = extended_Stokes_frames(r, spm, r_inner_IPS,
+                                                r_outer_IPS, PDI_frames)
+            PDI_frames['P_I_extended_r2'] = PDI_frames['P_I_extended'] * \
+                                            r_deprojected**2
 
     if HWP_used:
 
         for key in PDI_frames.keys():
-            # Rotating all images
-            PDI_frames[key] = rotate_cube(PDI_frames[key], pos_angles[0],
-                                          pad=False)
+            if PDI_frames[key] is not None:
+                # Rotating all images
+                PDI_frames[key] = rotate_cube(PDI_frames[key],
+                                              pos_angles[0], pad=False)
 
     # Save the data products
     save_PDI_frames(path_output_dir_selected, PDI_frames, object_name)
@@ -3563,16 +3867,16 @@ def run_pipeline(path_SCIENCE_dir,
 
     # Check if the directories exist -------------------------------------------
     if not path_SCIENCE_dir.is_dir():
-        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir)} does not exist.')
+        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir.resolve())} does not exist.')
 
     if not path_master_DARK_dir.is_dir():
-        raise IOError(f'\nThe master DARK directory {str(path_master_DARK_dir)} does not exist.')
+        raise IOError(f'\nThe master DARK directory {str(path_master_DARK_dir.resolve())} does not exist.')
 
     if not path_master_FLAT_dir.is_dir():
-        raise IOError(f'\nThe master FLAT directory {str(path_master_FLAT_dir)} does not exist.')
+        raise IOError(f'\nThe master FLAT directory {str(path_master_FLAT_dir.resolve())} does not exist.')
 
     if not path_master_BPM_dir.is_dir():
-        raise IOError(f'\nThe master BPM directory {str(path_master_BPM_dir)} does not exist.')
+        raise IOError(f'\nThe master BPM directory {str(path_master_BPM_dir.resolve())} does not exist.')
 
     # Create the path of the output directory
     path_output_dir = Path(path_SCIENCE_dir, 'pipeline_output')
@@ -3586,7 +3890,7 @@ def run_pipeline(path_SCIENCE_dir,
 
     # Check if SCIENCE directory is empty
     if len(path_SCIENCE_files) == 0:
-        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir)} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
+        raise IOError(f'\nThe SCIENCE directory {str(path_SCIENCE_dir.resolve())} does not contain FITS-files. Please ensure that any FITS-files are uncompressed.')
 
 
     # Create the log file ------------------------------------------------------
@@ -3597,27 +3901,43 @@ def run_pipeline(path_SCIENCE_dir,
         print_and_log('=== Welcome to PIPPIN (PdI PiPelIne for Naco data) ===',
                       new_file=new_log_file, pad=80, pad_character='=')
         print_and_log('')
-        print_and_log(f'Created output directory {str(path_output_dir)}')
-        print_and_log(f'Created log file {str(path_log_file)}')
+        print_and_log('')
+        print_and_log(f'Created output directory {str(path_output_dir.resolve())}')
+        print_and_log('')
+        print_and_log(f'Created log file {str(path_log_file.resolve())}')
+        print_and_log('')
 
 
     # Read the configuration file ----------------------------------------------
     path_config_file = Path(path_SCIENCE_dir, 'config.conf')
-    print_and_log(f'Reading configuration file {str(path_config_file)}')
+    print_and_log(f'Reading configuration file {str(path_config_file.resolve())}')
 
-    run_pre_processing, remove_data_products, split_observing_blocks, y_pixel_range, \
-    sky_subtraction_method, sky_subtraction_min_offset, remove_horizontal_stripes, \
-    centering_method, tied_offset, size_to_crop, \
-    r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi, r_crosstalk, \
-    object_name, disk_pos_angle, disk_inclination \
+    run_pre_processing, \
+    remove_data_products, \
+    split_observing_blocks, \
+    y_pixel_range, \
+    sky_subtraction_method, \
+    sky_subtraction_min_offset, \
+    remove_horizontal_stripes, \
+    centering_method, \
+    tied_offset, \
+    size_to_crop, \
+    r_inner_IPS, \
+    r_outer_IPS, \
+    crosstalk_correction, \
+    minimise_U_phi, \
+    r_crosstalk, \
+    object_name, \
+    disk_pos_angle, \
+    disk_inclination \
     = read_config_file(path_config_file)
 
     # Read information from the SCIENCE headers --------------------------------
-    dict_headers = {'ESO INS GRP ID':[],                             # HWP
-                    'ESO INS OPTI1 ID':[],                           # Wollaston prism
-                    'ESO INS OPTI4 ID':[],                           # Wiregrid
-                    'ESO INS OPTI7 ID':[],                           # Detector
-                    'ESO DET WIN NX':[], 'ESO DET WIN NY':[],        # Window shape
+    dict_headers = {'ESO INS GRP ID':[],                      # HWP
+                    'ESO INS OPTI1 ID':[],                    # Wollaston prism
+                    #'ESO INS OPTI4 ID':[],                    # Wiregrid
+                    'ESO INS OPTI7 ID':[],                    # Detector
+                    'ESO DET WIN NX':[], 'ESO DET WIN NY':[], # Window shape
                     'ESO DET WIN STARTX':[], 'ESO DET WIN STARTY':[]
                     }
     for x in path_SCIENCE_files:
@@ -3631,24 +3951,26 @@ def run_pipeline(path_SCIENCE_dir,
 
         # Usage of HWP, Wollaston prism, wiregrid and camera
         HWP_used       = (OBS_config_i[:2]=='Half_Wave_Plate').any()
-        Wollaston_used = (np.ma.mask_or(OBS_config_i[:3]=='Wollaston_00',
-                                        OBS_config_i[:3]=='Wollaston_45')
+        Wollaston_used = (np.ma.mask_or(OBS_config_i[:2]=='Wollaston_00',
+                                        OBS_config_i[:2]=='Wollaston_45')
                          ).any()
-        camera_used    = OBS_config_i[3]
+        camera_used    = OBS_config_i[2]
 
         Wollaston_45 = False
         if Wollaston_used:
-            Wollaston_45 = (OBS_config_i[:3]=='Wollaston_45').any()
+            Wollaston_45 = (OBS_config_i[:2]=='Wollaston_45').any()
 
-        if OBS_config_i[1] in ['FLM_13', 'FLM_27']:
+        if OBS_config_i[1] in ['FLM_13', 'FLM_27', 'FLM_54']:
             # Polarimetric mask was not used
             FLAT_pol_mask = False
         else:
             FLAT_pol_mask = True
 
         # Set the window shape and window starting pixel
-        window_shape = [int(float(OBS_config_i[-4])), int(float(OBS_config_i[-3]))]
-        window_start = [int(float(OBS_config_i[-2])), int(float(OBS_config_i[-1]))]
+        window_shape = [int(float(OBS_config_i[-4])),
+                        int(float(OBS_config_i[-3]))]
+        window_start = [int(float(OBS_config_i[-2])),
+                        int(float(OBS_config_i[-1]))]
 
         # Read the FLATs, BPMs and DARKs
         path_FLAT_files = np.array(sorted(Path(path_master_FLAT_dir
@@ -3665,13 +3987,16 @@ def run_pipeline(path_SCIENCE_dir,
         path_SCIENCE_files_i = path_SCIENCE_files[SCIENCE_mask]
 
         # Split the data into unique observation types and create directories
-        read_unique_obsTypes(path_SCIENCE_files_i, split_observing_blocks)
+        read_unique_obsTypes(path_SCIENCE_files_i, split_observing_blocks,
+                             HWP_used, Wollaston_used, Wollaston_45,
+                             camera_used)
         global path_SCIENCE_files_selected
         global path_output_dir_selected
         global obsType_selected
 
         # Run for each unique observation type
-        for path_output_dir_selected, obsType_selected in zip(path_output_dirs, unique_obsTypes):
+        for path_output_dir_selected, obsType_selected in zip(path_output_dirs,\
+                                                              unique_obsTypes):
 
             # Mask of the same observation type
             mask_selected = ((obsTypes==obsType_selected).sum(axis=1)==3)
@@ -3799,7 +4124,9 @@ def run_example(path_cwd):
         # Files exist, run the pipeline
 
         # Create master FLATs, BPMs and DARKs from the provided paths
-        path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
+        path_master_FLAT_dir, \
+        path_master_BPM_dir, \
+        path_master_DARK_dir \
         = prepare_calib_files(path_SCIENCE_dir=path_SCIENCE_dir,
                               path_FLAT_dir=path_FLAT_dir,
                               path_master_BPM_dir=path_master_BPM_dir,
