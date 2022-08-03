@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LogNorm, SymLogNorm
-mpl.use('agg')
+#mpl.use('agg')
 
 from astropy.io import fits
 from astropy.modeling import models, fitting
@@ -259,6 +259,7 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             vmin, vmax = np.nanmedian(SCIENCE_i), np.nanmax(SCIENCE_i)
             if vmin >= vmax:
                 vmin = 0.1*vmax
+            #print(vmin, vmax)
             ax[0].imshow(SCIENCE_i, cmap=cmap, aspect='equal',
                          norm=LogNorm(vmin=vmin, vmax=vmax))
 
@@ -271,6 +272,9 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
 
 
             vmin, vmax = np.nanmedian(reduced_i), np.nanmax(reduced_i)
+            if vmin >= vmax:
+                vmin = 0.1*vmax
+            #print(vmin, vmax)
             ax[1].imshow(reduced_i, cmap=cmap, aspect='equal',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
                          norm=LogNorm(vmin=vmin, vmax=vmax))
@@ -287,6 +291,7 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             vmin, vmax = np.nanmedian(skysub_i_pos), np.nanmax(skysub_i_pos)
             if vmin >= vmax:
                 vmin = 0.1*vmax
+            #print(vmin, vmax)
             ax[2].imshow(skysub_i_pos, cmap=cmap, aspect='equal',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
                          norm=LogNorm(vmin=vmin, vmax=vmax))
@@ -295,6 +300,7 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             vmin, vmax = np.nanmedian(-skysub_i_neg), np.nanmax(-skysub_i_neg)
             if vmin >= vmax:
                 vmin = 0.1*vmax
+            #print(vmin, vmax)
             ax[2].imshow(-skysub_i_neg, cmap=cmap_skysub, aspect='equal',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
                          norm=LogNorm(vmin=vmin, vmax=vmax))
@@ -306,13 +312,15 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             vmin, vmax = np.nanmedian(beams_i), np.nanmax(beams_i)
             if vmin >= vmax:
                 vmin = 0.1*vmax
-            ax[3].imshow(beams_i[0], cmap=cmap,
-                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+            #print(vmin, vmax)
+            #print()
+            if np.isnan(vmin) or np.isnan(vmax):
+                vmin, vmax = 0, 1
+            ax[3].imshow(beams_i[0], cmap=cmap, aspect='equal',
                          norm=LogNorm(vmin=vmin, vmax=vmax))
 
             if beams_i.shape[0] != 1:
-                ax[4].imshow(beams_i[1], cmap=cmap,
-                             extent=(xp.min(), xp.max(), yp.max(), yp.min()),
+                ax[4].imshow(beams_i[1], cmap=cmap, aspect='equal',
                              norm=LogNorm(vmin=vmin, vmax=vmax))
 
         if beam_centers is not None:
@@ -726,7 +734,7 @@ def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
 
         # Apply the minimum filter
         box = np.zeros((Moffat_y_offset,3))
-        box[:3,:]  = 1
+        box[:+3,:] = 1
         box[-3:,:] = 1
 
         filtered_im = ndimage.minimum_filter(im - mask_approx,
@@ -1805,13 +1813,15 @@ def open_AO_loop(beams, sigma_max=5):
     '''
 
     # Find the maximum in the (extra)-ordinary beam
-    max_counts = np.nanmax(beams[:,:,20:-20,20:-20], axis=(2,3))
+    max_counts = np.nanmax(beams[:,:,beams.shape[2]//2-20:beams.shape[2]//2+20,
+                                 beams.shape[3]//2-20:beams.shape[3]//2+20],
+                           axis=(2,3))
 
     # Perform an iterative sigma-clipping on the maximum counts
     filtered_max_counts_ord_beam, \
     low_ord_beam, \
     high_ord_beam \
-    = sigma_clip(max_counts[:,0], sigma_max, maxiters=2,
+    = sigma_clip(max_counts[:,0], sigma_max, maxiters=1,
                  masked=True, return_bounds=True)
     # Lower and upper bounds of the sigma-clip
     bounds_ord_beam    = (low_ord_beam, high_ord_beam)
@@ -1820,8 +1830,9 @@ def open_AO_loop(beams, sigma_max=5):
     mask_clip_beams    = mask_clip_ord_beam
 
     # Mask for lower limit
-    mask_low_ord_beam = (filtered_max_counts_ord_beam < \
-                         0.1*np.nanmedian(filtered_max_counts_ord_beam))
+    #mask_low_ord_beam = (filtered_max_counts_ord_beam < \
+    #                     0.1*np.nanmedian(filtered_max_counts_ord_beam))
+    mask_low_ord_beam = (filtered_max_counts_ord_beam < 0)
     mask_low_beams    = mask_low_ord_beam
 
     if max_counts.shape[1] != 1:
@@ -1836,8 +1847,9 @@ def open_AO_loop(beams, sigma_max=5):
         mask_clip_ext_beam = np.ma.getmask(filtered_max_counts_ext_beam)
         mask_clip_beams    = (mask_clip_ord_beam + mask_clip_ext_beam != 0)
 
-        mask_low_ext_beam = (filtered_max_counts_ext_beam < \
-                             0.1*np.nanmedian(filtered_max_counts_ext_beam))
+        #mask_low_ext_beam = (filtered_max_counts_ext_beam < \
+        #                     0.1*np.nanmedian(filtered_max_counts_ext_beam))
+        mask_low_ext_beam = (filtered_max_counts_ext_beam < 0)
         mask_low_beams    = np.ma.mask_or(mask_low_ord_beam, mask_low_ext_beam)
 
     # Combine the lower limit mask and the sigma-clipping mask
@@ -1944,8 +1956,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
     # Ensure that FLATs and DARKs have the same image shapes
     path_DARK_files = [file_i for file_i in path_DARK_files
-                       if (read_from_FITS_header(file_i, 'NAXIS')==2)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
+                       if (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
                        and (read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
                       ]
     path_DARK_files = np.array(path_DARK_files)
@@ -2062,7 +2073,10 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
             # Read the file
             DARK_j, DARK_header_j = fits.getdata(path_DARK_file_j, header=True)
-            DARKs_i.append(DARK_j.astype(np.float32))
+            if DARK_j.ndim > 2:
+                DARK_j = np.nanmedian(DARK_j.astype(np.float32), axis=0)
+
+            DARKs_i.append(DARK_j)
 
         # Median combine over the DARKs
         DARKs_i = np.array(DARKs_i)
@@ -2173,6 +2187,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         if OPTI1_ID_i in ['FLM_13', 'FLM_27', 'FLM_54']:
             OPTI1_ID_i = '_FLM'
+        elif OPTI1_ID_i == 'Wollaston_45':
+            OPTI1_ID_i = '_Wollaston_45'
         else:
             OPTI1_ID_i = ''
 
@@ -2222,7 +2238,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
     return path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir
 
 def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
-                      path_BPM_files, path_DARK_files, FLAT_pol_mask):
+                      path_BPM_files, path_DARK_files, FLAT_pol_mask,
+                      Wollaston_45):
     '''
     Read master FLAT, bad-pixel mask and DARK closest to the observing date.
 
@@ -2240,6 +2257,8 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
         Filenames of DARK files.
     FLAT_pol_mask : bool
         If True, read a FLAT with polarimetric mask.
+    Wollaston_45 : bool
+        If True, Wollaston_45 was used, else Wollaston_00 was used.
 
     Output
     ------
@@ -2263,9 +2282,12 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
         if FLAT_pol_mask:
             # Polarimetric mask was used
             replacing_str = filter_used
-        else:
+        elif not FLAT_pol_mask and not Wollaston_45:
             # Mask was not used, add '_FLM_' to FLAT/BPM filenames
             replacing_str = f'{filter_used}_FLM'
+        elif not FLAT_pol_mask and Wollaston_45:
+            # Rotated Wollaston was used, add '_Wollaston_45_'
+            replacing_str = f'{filter_used}_FLM_Wollaston_45'
 
         if replacing_str in path_FLAT_files[i].name:
             # Select only FLATs with the correct filter
@@ -2505,7 +2527,7 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files,
         SCIENCE_expTime \
         = read_master_CALIB(file, filter_used, path_FLAT_files,
                             path_BPM_files, path_DARK_files,
-                            FLAT_pol_mask)
+                            FLAT_pol_mask, Wollaston_45)
 
         # Reshape the master FLAT, BPM and DARK
         if (window_shape == [1024,1024]) or (window_shape == [1026,1024]):
@@ -2676,7 +2698,7 @@ def deprojected_radius(xp, yp, xc, yc, disk_pos_angle, disk_inclination):
 
     return r_corr
 
-def rotate_cube(cube, pos_angle, pad=False):
+def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
     '''
     Rotate the cube using a position angle.
 
@@ -2697,35 +2719,45 @@ def rotate_cube(cube, pos_angle, pad=False):
 
     if pad:
         pad_width = ((0, 0),
-                     ((cube.shape[2]-cube.shape[1])//2,
-                      (cube.shape[2]-cube.shape[1])//2),
+                     ((cube.shape[rotate_axes[1]] -
+                       cube.shape[rotate_axes[0]]) // 2,
+                      (cube.shape[rotate_axes[1]] -
+                       cube.shape[rotate_axes[0]]) // 2),
                      (0, 0)
                     )
         cube = np.pad(cube, pad_width, constant_values=0.0)
 
+        mask = np.isnan(cube)
+        cube[mask] = 0
+
         # Rotate a cube
         rotated_cube = ndimage.rotate(cube, pos_angle, reshape=False,
-                                      axes=(1,2), cval=0.0)
+                                      axes=rotate_axes, cval=0.0)
+        rotated_mask = ndimage.rotate(mask, pos_angle, reshape=False,
+                                      axes=rotate_axes, cval=0.0, order=0)
+        rotated_cube[rotated_mask] = np.nan
 
         # Set pixels outside the polarimetric mask to NaN
         pos_angle_rad = np.deg2rad(pos_angle)
 
         # Line through the image centre
-        xc, yc = (cube.shape[2]-1)/2, (cube.shape[1]-1)/2
+        xc = (cube.shape[rotate_axes[1]]-1)/2
+        yc = (cube.shape[rotate_axes[0]]-1)/2
         x = np.linspace(-500, 500, 2000) * np.cos(pos_angle_rad) + xc
         y = -np.linspace(-500, 500, 2000) * np.sin(pos_angle_rad) + yc
 
         # Bounding lines
-        x1 = -(cube.shape[1]//2-pad_width[1][0]) * \
+        x1 = -(cube.shape[rotate_axes[0]]//2 - pad_width[1][0]) * \
              np.cos(pos_angle_rad+np.pi/2) + x
-        y1 = +(cube.shape[1]//2-pad_width[1][0]) * \
+        y1 = +(cube.shape[rotate_axes[0]]//2 - pad_width[1][0]) * \
              np.sin(pos_angle_rad+np.pi/2) + y
-        x2 = +(cube.shape[1]//2-pad_width[1][0]) * \
+        x2 = +(cube.shape[rotate_axes[0]]//2 - pad_width[1][0]) * \
              np.cos(pos_angle_rad+np.pi/2) + x
-        y2 = -(cube.shape[1]//2-pad_width[1][0]) * \
+        y2 = -(cube.shape[rotate_axes[0]]//2 - pad_width[1][0]) * \
              np.sin(pos_angle_rad+np.pi/2) + y
 
-        yp, xp = np.mgrid[0:rotated_cube.shape[1], 0:rotated_cube.shape[2]]
+        yp, xp = np.mgrid[0:rotated_cube.shape[rotate_axes[0]],
+                          0:rotated_cube.shape[rotate_axes[1]]]
 
         # Interpolate onto the image grid
         xv = xp[0]
@@ -2738,18 +2770,25 @@ def rotate_cube(cube, pos_angle, pad=False):
         rotated_cube[:,~((yp >= y_min) & (yp <= y_max))] = np.nan
 
     else:
+
         mask = np.isnan(cube)
         cube[mask] = 0
 
         # Rotate a cube
         rotated_cube = ndimage.rotate(cube, pos_angle, reshape=True,
-                                      axes=(1,2), cval=0.0)
+                                      axes=rotate_axes, cval=0.0)
         rotated_mask = ndimage.rotate(mask, pos_angle, reshape=True,
-                                      axes=(1,2), cval=0.0, order=0)
+                                      axes=rotate_axes, cval=0.0, order=0)
         rotated_cube[rotated_mask] = np.nan
 
     rotated_cube[rotated_cube==0] = np.nan
     return rotated_cube
+
+def collapse_beams(beams):
+
+    # Locate all the NaNs in the beams and mask them
+    mask = ~ np.all(np.isnan(beams), axis=(0,1,-1))
+    return beams[:,:,mask,:], mask
 
 def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
     '''
@@ -2837,7 +2876,7 @@ def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
     # Remove the incomplete HWP cycles
     mask_to_remove = np.isnan(HWP_cycle_number)
     if np.any(mask_to_remove):
-        print_and_log('    Removed files:')
+        print_and_log(f'    Removed {mask_to_remove.sum()} files:')
         for file_i, StokesPara_i in zip(path_beams_files[mask_to_remove],
                                         StokesPara[mask_to_remove]):
             print_and_log(f'    {StokesPara_i} {file_i.name}')
@@ -2852,7 +2891,6 @@ def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
 def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
     '''
     Remove any open AO-loop half-wave plate cycles.
-
     Input
     -----
     path_beams_files : list
@@ -2861,7 +2899,6 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
         Number of the corresponding HWP cycle.
     StokesPara : 1D-array
         Stokes parameters ('Q+', 'U+', 'Q-', 'U-').
-
     Output
     ------
     path_beams_files : list
@@ -2873,34 +2910,34 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
     '''
 
     print_and_log('--- Removing open AO-loop observations')
-
     path_open_loop_files = Path(path_beams_files[0].parent,
                                 'open_loop_files.txt')
-    open_loop_files = np.loadtxt(path_open_loop_files, dtype=str, ndmin=1)
 
-    if open_loop_files.ndim != 0:
+    open_loop_files = []
+    with open(path_open_loop_files, 'r') as f:
+        for file_i in f.readlines():
+            open_loop_files.append(Path(file_i.replace('\n','')))
 
-        if len(open_loop_files):
-            print_and_log('    Removed files:')
+    open_loop_files = np.array(open_loop_files)
 
-        for file_i in open_loop_files:
-            file_i = Path(file_i)
+    if len(open_loop_files) != 0:
 
-            if file_i in path_beams_files:
+        mask_to_remove = (path_beams_files[None,:]==open_loop_files[:,None])
+        mask_to_remove = mask_to_remove.sum(axis=0, dtype=np.bool)
 
-                # Determine which entire HWP cycle to remove
-                idx_file_i = np.argwhere(path_beams_files == file_i).flatten()
-                mask_to_remove = (HWP_cycle_number == HWP_cycle_number[idx_file_i])
+        cycles_to_remove = HWP_cycle_number[mask_to_remove]
+        mask_to_remove   = (HWP_cycle_number[None,:]==cycles_to_remove[:,None])
+        mask_to_remove   = mask_to_remove.sum(axis=0, dtype=np.bool)
 
-                for file_i, StokesPara_i in \
-                                        zip(path_beams_files[mask_to_remove], \
-                                        StokesPara[mask_to_remove]):
-                    print_and_log(f'    {StokesPara_i} {file_i.name}')
+        if np.any(mask_to_remove):
+            print_and_log(f'    Removed {mask_to_remove.sum()} files:')
+            for file_i, StokesPara_i in zip(path_beams_files[mask_to_remove],
+                                            StokesPara[mask_to_remove]):
+                print_and_log(f'    {StokesPara_i} {file_i.name}')
 
-                # Remove the entire HWP cycle
-                path_beams_files = path_beams_files[~mask_to_remove]
-                HWP_cycle_number = HWP_cycle_number[~mask_to_remove]
-                StokesPara = StokesPara[~mask_to_remove]
+        path_beams_files = path_beams_files[~mask_to_remove]
+        HWP_cycle_number = HWP_cycle_number[~mask_to_remove]
+        StokesPara       = StokesPara[~mask_to_remove]
 
     return path_beams_files, HWP_cycle_number, StokesPara
 
@@ -2980,7 +3017,7 @@ def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
 
     return new_beams
 
-def fit_U_efficiency(Q, U, I_Q, I_U, r_crosstalk):
+def fit_U_efficiency(Q, U, I_Q, I_U, r, r_crosstalk):
     '''
     Assess the crosstalk-efficiency of the Stokes U component
     by counting pixels in Q and U.
@@ -2995,6 +3032,7 @@ def fit_U_efficiency(Q, U, I_Q, I_U, r_crosstalk):
         Stokes Q intensity.
     I_U : 2D-array
         Stokes U intensity.
+    ....
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
 
@@ -3003,8 +3041,6 @@ def fit_U_efficiency(Q, U, I_Q, I_U, r_crosstalk):
     e_U : float
         Efficiency of the U observation.
     '''
-
-    r, phi = r_phi(Q, (Q.shape[1]-1)/2, (Q.shape[0]-1)/2)
 
     # Assess efficiency in an annulus with clear signal
     r_inner, r_outer = r_crosstalk
@@ -3023,7 +3059,7 @@ def fit_U_efficiency(Q, U, I_Q, I_U, r_crosstalk):
 
     # Best efficiency is found when |Q|~|U/e_U|
     e_U = e_U_all[np.argmin(np.abs(num_pixels_over - num_pixels_under))]
-    return np.round(e_U,2)
+    return np.round(e_U, 2)
 
 def fit_offset_angle(r, phi, PDI_frames, r_crosstalk):
     '''
@@ -3078,14 +3114,14 @@ def individual_Stokes_frames(beams):
 
     Input
     -----
-    beams : 4D-array
+    beams : 3D-array
         Array of beam-images.
 
     Output
     ------
-    ind_I : 3D-array
+    ind_I : 2D-array
         Intensity image for each observation.
-    ind_QU : 3D-array
+    ind_QU : 2D-array
         Stokes Q/U image for each observation.
     '''
 
@@ -3101,22 +3137,24 @@ def individual_Stokes_frames(beams):
 
     return ind_I, ind_QU
 
-def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction,
-                      r_crosstalk, Wollaston_used):
+def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
+                      crosstalk_correction, r, r_crosstalk, Wollaston_used):
     '''
     Apply the double-difference method to
     remove instrumental polarisation.
 
     Input
     -----
-    ind_I : 3D-array
+    ind_I : 2D-array
         Intensity image for each observation.
-    ind_QU : 3D-array
+    ind_QU : 2D-array
         Stokes Q/U image for each observation.
+
     StokesPara : 1D-array
         Stokes parameters ('Q+', 'U+', 'Q-', 'U-').
     crosstalk_correction : bool
         Correct for crosstalk_correction if True.
+    ....
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
     Wollaston_used : bool
@@ -3173,7 +3211,6 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction,
 
             I_U = ind_I[mask_U]
 
-
     # Determine the U crosstalk-efficiency and correct
     if crosstalk_correction and (Q is not None) and (U is not None):
 
@@ -3188,17 +3225,17 @@ def double_difference(ind_I, ind_QU, StokesPara, crosstalk_correction,
         # Loop over the ord./ext. flux-scaling annuli
         e_U_all = []
         for j in range(Q.shape[-1]):
-            e_U = fit_U_efficiency(median_Q[:,:,j], median_U[:,:,j],
-                                   median_I_Q[:,:,j], median_I_U[:,:,j],
-                                   r_crosstalk)
+            e_U = fit_U_efficiency(median_Q[:,j], median_U[:,j],
+                                   median_I_Q[:,j], median_I_U[:,j],
+                                   r, r_crosstalk)
             e_U_all.append(e_U)
 
         e_U_all = np.array(e_U_all)
         print_and_log(f'    Efficiency per IPS annulus: e_U = {list(e_U_all)}')
 
         # Correct for the reduced efficiency
-        U   /= e_U_all[None,None,None,:]
-        I_U /= e_U_all[None,None,None,:]
+        U   /= e_U_all[None,None,:]
+        I_U /= e_U_all[None,None,:]
 
     # Save the Q, U and I images to a dictionary
     PDI_frames = {'cube_Q': Q,
@@ -3287,20 +3324,20 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
         for j, r_inner, r_outer in zip(range(len(r_inner_IPS)), \
                                        r_inner_IPS, r_outer_IPS):
 
-            if Q.ndim == 3:
+            if Q.ndim == 2:
                 # Apply saturated-pixels mask before IPS
-                Q_j = Q[i,:,:] * spm
-                U_j = U[i,:,:] * spm
-                I_Q_j = I_Q[i,:,:] * spm
-                I_U_j = I_U[i,:,:] * spm
-                I_j = I[i,:,:] * spm
+                Q_j = Q[i,:] * spm
+                U_j = U[i,:] * spm
+                I_Q_j = I_Q[i,:] * spm
+                I_U_j = I_U[i,:] * spm
+                I_j = I[i,:] * spm
             else:
                 # Apply saturated-pixels mask before IPS
-                Q_j = Q[i,:,:,j] * spm
-                U_j = U[i,:,:,j] * spm
-                I_Q_j = I_Q[i,:,:,j] * spm
-                I_U_j = I_U[i,:,:,j] * spm
-                I_j = I[i,:,:,j] * spm
+                Q_j = Q[i,:,j] * spm
+                U_j = U[i,:,j] * spm
+                I_Q_j = I_Q[i,:,j] * spm
+                I_U_j = I_U[i,:,j] * spm
+                I_j = I[i,:,j] * spm
 
             # Multiple annuli for instrumental polarisation correction
             mask_annulus = (r >= r_inner) & (r <= r_outer)
@@ -3351,7 +3388,7 @@ def final_Stokes_frames(r, phi, PDI_frames, minimise_U_phi, r_crosstalk):
     print_and_log('--- Creating final data products (PI, Q_phi, U_phi)')
 
     # De-projected radius
-    PDI_frames['r'] = r[None,:,:]
+    PDI_frames['r'] = r[None,:]
 
     # polarised intensity image
     PDI_frames['P_I'] = np.sqrt(PDI_frames['median_Q_IPS']**2 + \
@@ -3366,7 +3403,7 @@ def final_Stokes_frames(r, phi, PDI_frames, minimise_U_phi, r_crosstalk):
         print_and_log(f'    Offset angle per IPS annulus: theta (deg) = {list(theta)}')
 
         # Add the best offset angles to the phi array
-        phi = phi[None,:,:] + np.deg2rad(theta[:,None,None])
+        phi = phi[None,:] + np.deg2rad(theta[:,None])
 
     # Azimuthal Stokes parameters
     PDI_frames['Q_phi'] = - PDI_frames['median_Q_IPS']*np.cos(2*phi) \
@@ -3467,7 +3504,7 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
 
     return PDI_frames
 
-def write_header_coordinates(file, header, PDI_frames, object_name):
+def write_header_coordinates(file, header, object_name, mask_beams):
     '''
     Create header keywords to add a world-coordinate system.
 
@@ -3476,10 +3513,9 @@ def write_header_coordinates(file, header, PDI_frames, object_name):
     file : str
         Filename of SCIENCE observations.
     header : astropy header
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
     object_name : str
         Object's name
+    ....
 
     Output
     ------
@@ -3506,7 +3542,7 @@ def write_header_coordinates(file, header, PDI_frames, object_name):
     header['CD2_2'] = new_CD[1,1]
 
     # Query the SIMBAD archive to retrieve object coordinates
-    query_result = Simbad.query_object(object_name)
+    query_result = Simbad.query_object(object_name, wildcard=True)
     # Convert the icrs coordinates to fk5
     coord_icrs = SkyCoord(ra=query_result['RA'], dec=query_result['DEC'],
                           frame='icrs', unit=(u.hourangle, u.deg))
@@ -3517,10 +3553,7 @@ def write_header_coordinates(file, header, PDI_frames, object_name):
     header['CRVAL2'] = coord_fk5.dec.degree[0]
 
     # Reference pixel, first pixel has index 1
-    if PDI_frames['median_Q'] is not None:
-        im_shape = PDI_frames['median_Q'].shape[1:]
-    elif PDI_frames['median_U'] is not None:
-        im_shape = PDI_frames['median_U'].shape[1:]
+    im_shape = mask_beams.shape
 
     header['CRPIX1'] = im_shape[1]/2
     header['CRPIX2'] = im_shape[0]/2
@@ -3535,16 +3568,15 @@ def write_header_coordinates(file, header, PDI_frames, object_name):
 
     return header
 
-def write_header(PDI_frames, object_name):
+def write_header(object_name, mask_beams):
     '''
     Create header keywords.
 
     Input
     -----
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
     object_name : str
         Object's name
+    ....
 
     Output
     ------
@@ -3634,11 +3666,12 @@ def write_header(PDI_frames, object_name):
     hdu.header['DATE REDUCED'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
     hdu.header = write_header_coordinates(path_beams_files_selected[0],
-                                          hdu.header, PDI_frames, object_name)
+                                          hdu.header, object_name, mask_beams)
 
     return hdu
 
-def save_PDI_frames(path_output_dir, PDI_frames, object_name):
+def save_PDI_frames(path_output_dir, PDI_frames, object_name,
+                    mask_beams, HWP_used, pos_angle):
     '''
     Save the resulting images from PDI.
 
@@ -3650,6 +3683,9 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
         Dictionary of images resulting from PDI.
     object_name : str
         Object's name
+    ....
+    ....
+    ....
     '''
 
     # Make the directory for the PDI images
@@ -3658,7 +3694,9 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
         path_PDI.mkdir()
 
     # Create a header
-    hdu = write_header(PDI_frames, object_name)
+    mask_beams_rotated = rotate_cube(mask_beams, pos_angle, pad=False,
+                                     rotate_axes=(0,1))
+    hdu = write_header(object_name, mask_beams_rotated)
 
     # Save all images in the PDI_frames dictionary
     for key in PDI_frames.keys():
@@ -3666,8 +3704,30 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name):
         im_to_save = PDI_frames[key]
         if im_to_save is not None:
 
-            if im_to_save.ndim==4:
-                im_to_save = np.moveaxis(im_to_save, -1, 0)
+            # Move the pixel-axis to the first axis
+            im_to_save = np.moveaxis(im_to_save, 1, -1)
+
+            # Reshape the array to form an image
+            new_shape      = (*im_to_save.shape[:-1], *mask_beams.shape)
+            new_im_to_save = np.ones(new_shape) * np.nan
+
+            if len(new_shape)==2:
+                new_im_to_save[mask_beams] = im_to_save
+            elif len(new_shape)==3:
+                new_im_to_save[:,mask_beams] = im_to_save
+            elif len(new_shape)==4:
+                new_im_to_save[:,:,mask_beams] = im_to_save
+                new_im_to_save = np.swapaxes(new_im_to_save, 0, 1)
+
+            im_to_save = new_im_to_save
+
+            # Remove axes of length 1
+            im_to_save = np.squeeze(im_to_save)
+
+            if HWP_used:
+                # Rotate the image
+                im_to_save = rotate_cube(im_to_save, pos_angle, pad=False,
+                                         rotate_axes=(-2,-1))
 
             write_FITS_file(Path(path_PDI, f'{key}.fits'),
                             im_to_save, header=hdu.header)
@@ -3725,30 +3785,27 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         path_beams_files_selected, \
         HWP_cycle_number, \
         StokesPara \
-        = remove_incomplete_HWP_cycles(path_beams_files_selected,
-                                       StokesPara)
+        = remove_incomplete_HWP_cycles(path_beams_files_selected, StokesPara)
 
         if len(StokesPara)==0:
             # There are no complete cycles, continue to next output directory
             print_and_log('No complete HWP cycles')
             return
-
-        # Remove HWP cycles where open AO-loops were found
-        path_beams_files_selected, \
-        HWP_cycle_number, \
-        StokesPara \
-        = remove_open_AO_loop(path_beams_files_selected,
-                              HWP_cycle_number,
-                              StokesPara)
-
-        if len(StokesPara)==0:
-            # There are no complete cycles, continue to next output directory
-            print_and_log('No complete HWP cycles')
-            return
-
     else:
-
+        HWP_cycle_number = np.arange(len(path_beams_files_selected))
         print_and_log('No complete HWP cycles, creating images of the available Stokes components')
+
+    # Remove HWP cycles where open AO-loops were found
+    path_beams_files_selected, \
+    HWP_cycle_number, \
+    StokesPara \
+    = remove_open_AO_loop(path_beams_files_selected,
+                          HWP_cycle_number, StokesPara)
+
+    if len(StokesPara)==0:
+        # There are no complete cycles, continue to next output directory
+        print_and_log('No complete HWP cycles')
+        return
 
     # Load the data
     beams = np.array([fits.getdata(x).astype(np.float32) \
@@ -3767,7 +3824,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
 
         beams = np.array(rotated_beams)
 
-    xc, yc = (beams[0,0].shape[1]-1)/2, (beams[0,0].shape[0]-1)/2
+    xc, yc = (beams.shape[3]-1)/2, (beams.shape[2]-1)/2
     r, phi = r_phi(beams[0,0], xc, yc)
     r, phi = r.astype(np.float32), phi.astype(np.float32)
 
@@ -3778,12 +3835,18 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     if Wollaston_used:
         beams = equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS)
 
+    # Collapse the beams to save memory
+    beams, mask_beams = collapse_beams(beams)
+    # Flatten the other arrays
+    r, phi = r[mask_beams].flatten(), phi[mask_beams].flatten()
+    spm = spm[mask_beams].flatten()
+
     # Individual Stokes frames
     ind_I, ind_QU = individual_Stokes_frames(beams)
 
     # Double-difference
-    PDI_frames = double_difference(ind_I, ind_QU, StokesPara,
-                                   crosstalk_correction, r_crosstalk,
+    PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
+                                   crosstalk_correction, r, r_crosstalk,
                                    Wollaston_used)
 
     if (PDI_frames['cube_Q'] is not None) and \
@@ -3798,19 +3861,19 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
               I_Q=PDI_frames['cube_I_Q'], I_U=PDI_frames['cube_I_U'],
               I=PDI_frames['cube_I'])
 
-        # Final Stokes frames
-        PDI_frames, phi = final_Stokes_frames(r, phi, PDI_frames,
-                                              minimise_U_phi,
-                                              r_crosstalk)
-
         # Retrieve the de-projected radius
-        yp, xp = np.mgrid[0:r.shape[0], 0:r.shape[1]]
+        yp, xp = np.mgrid[0:mask_beams.shape[0], 0:mask_beams.shape[1]]
         r_deprojected = deprojected_radius(xp, yp,
-                                           (r.shape[1]-1)/2,
-                                           (r.shape[0]-1)/2,
+                                           (mask_beams.shape[0]-1)/2,
+                                           (mask_beams.shape[1]-1)/2,
                                            disk_pos_angle,
                                            disk_inclination)
         r_deprojected = r_deprojected.astype(np.float32)
+        r_deprojected = r_deprojected[mask_beams].flatten()
+
+        # Final Stokes frames
+        PDI_frames, phi = final_Stokes_frames(r_deprojected, phi, PDI_frames,
+                                              minimise_U_phi, r_crosstalk)
 
         # r^2-scaled Stokes parameters
         PDI_frames['P_I_r2']   = PDI_frames['P_I'] * r_deprojected**2
@@ -3824,16 +3887,9 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
             PDI_frames['P_I_extended_r2'] = PDI_frames['P_I_extended'] * \
                                             r_deprojected**2
 
-    if HWP_used:
-
-        for key in PDI_frames.keys():
-            if PDI_frames[key] is not None:
-                # Rotating all images
-                PDI_frames[key] = rotate_cube(PDI_frames[key],
-                                              pos_angles[0], pad=False)
-
     # Save the data products
-    save_PDI_frames(path_output_dir_selected, PDI_frames, object_name)
+    save_PDI_frames(path_output_dir_selected, PDI_frames,
+                    object_name, mask_beams, HWP_used, pos_angles[0])
 
 def run_pipeline(path_SCIENCE_dir,
                  path_master_FLAT_dir='../data/master_FLAT/',
