@@ -2785,10 +2785,27 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
     return rotated_cube
 
 def collapse_beams(beams):
+    '''
+    Collapse the beams array to remove the NaNs.
+
+    Input
+    -----
+    beams : 4D-array
+        Array of beam-images.
+
+    Output
+    ------
+    masked_beams : 3D-array
+        Collapsed array of beam-images
+    mask : 2D-array
+        Mask of the non-NaN values.
+    '''
 
     # Locate all the NaNs in the beams and mask them
-    mask = ~ np.all(np.isnan(beams), axis=(0,1,-1))
-    return beams[:,:,mask,:], mask
+    mask = ~ np.all(np.isnan(beams), axis=(0,1))
+    masked_beams = beams[:,:,mask]
+
+    return masked_beams, mask
 
 def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
     '''
@@ -2891,6 +2908,7 @@ def remove_incomplete_HWP_cycles(path_beams_files, StokesPara):
 def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
     '''
     Remove any open AO-loop half-wave plate cycles.
+
     Input
     -----
     path_beams_files : list
@@ -2899,6 +2917,7 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
         Number of the corresponding HWP cycle.
     StokesPara : 1D-array
         Stokes parameters ('Q+', 'U+', 'Q-', 'U-').
+
     Output
     ------
     path_beams_files : list
@@ -2974,11 +2993,11 @@ def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
 
     Input
     -----
-    r : 2D-array
+    r : 1D-array
         Radius-array.
-    spm : 2D-array
+    spm : 1D-array
         Saturated pixel mask.
-    beams : 4D-array
+    beams : 3D-array
         Array of beam-images.
     r_inner_IPS : list
         Inner radii of the annuli used in IP-subtraction and ord./ext.
@@ -2989,7 +3008,7 @@ def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
 
     Output
     ------
-    new_beams : 5D-array
+    new_beams : 4D-array
         Array of beam-images, re-scaled ordinary and extra-ordinary beams.
     '''
 
@@ -3003,12 +3022,12 @@ def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
         f_ext = np.nansum((beams[:,1]*spm[None,:])[:,mask_annulus], axis=1)
 
         X_ord_ext_i = f_ord/f_ext
-        X_ord_ext_i = X_ord_ext_i[:,None,None]
+        X_ord_ext_i = X_ord_ext_i[:,None]
 
         new_ord_beam_i = beams[:,0] / np.sqrt(X_ord_ext_i)
         new_ext_beam_i = beams[:,1] * np.sqrt(X_ord_ext_i)
-        new_beams_i    = np.concatenate((new_ord_beam_i[:,None,:,:],
-                                         new_ext_beam_i[:,None,:,:]),
+        new_beams_i    = np.concatenate((new_ord_beam_i[:,None,:],
+                                         new_ext_beam_i[:,None,:]),
                                         axis=1, dtype=np.float32)
 
         new_beams.append(new_beams_i)
@@ -3024,15 +3043,16 @@ def fit_U_efficiency(Q, U, I_Q, I_U, r, r_crosstalk):
 
     Input
     -----
-    Q : 2D-array
+    Q : 1D-array
         Stokes Q observation.
-    U : 2D-array
+    U : 1D-array
         Stokes U observation.
-    I_Q : 2D-array
+    I_Q : 1D-array
         Stokes Q intensity.
-    I_U : 2D-array
+    I_U : 1D-array
         Stokes U intensity.
-    ....
+    r : 1D-array
+        Radius-array.
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
 
@@ -3067,9 +3087,9 @@ def fit_offset_angle(r, phi, PDI_frames, r_crosstalk):
 
     Input
     -----
-    r : 2D-array
+    r : 1D-array
         Radius-array.
-    phi : 2D-array
+    phi : 1D-array
         Azimuthal angle.
     PDI_frames : dict
         Dictionary of images resulting from PDI.
@@ -3114,14 +3134,14 @@ def individual_Stokes_frames(beams):
 
     Input
     -----
-    beams : 3D-array
+    beams : 4D-array
         Array of beam-images.
 
     Output
     ------
-    ind_I : 2D-array
+    ind_I : 3D-array
         Intensity image for each observation.
-    ind_QU : 2D-array
+    ind_QU : 3D-array
         Stokes Q/U image for each observation.
     '''
 
@@ -3138,23 +3158,25 @@ def individual_Stokes_frames(beams):
     return ind_I, ind_QU
 
 def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
-                      crosstalk_correction, r, r_crosstalk, Wollaston_used):
+                      crosstalk_correction, r, r_crosstalk,
+                      Wollaston_used):
     '''
-    Apply the double-difference method to
-    remove instrumental polarisation.
+    Apply the double-difference method to remove instrumental polarisation.
 
     Input
     -----
-    ind_I : 2D-array
+    ind_I : 3D-array
         Intensity image for each observation.
-    ind_QU : 2D-array
+    ind_QU : 3D-array
         Stokes Q/U image for each observation.
-
+    mask_beams : 2D-array
+        Mask of the non-NaN values.
     StokesPara : 1D-array
         Stokes parameters ('Q+', 'U+', 'Q-', 'U-').
     crosstalk_correction : bool
         Correct for crosstalk_correction if True.
-    ....
+    r : 1D-array
+        Radius-array.
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
     Wollaston_used : bool
@@ -3238,24 +3260,35 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         I_U /= e_U_all[None,None,:]
 
     # Save the Q, U and I images to a dictionary
-    PDI_frames = {'cube_Q': Q,
-                  'cube_U': U,
-                  'cube_I_Q': I_Q,
-                  'cube_I_U': I_U,
-                  }
-    if (Q is not None) and (U is not None):
+    PDI_frames = dict()
+    PDI_frames['cube_Q'] = Q
+    del Q
+    PDI_frames['cube_U'] = U
+    del U
+    PDI_frames['cube_I_Q'] = I_Q
+    del I_Q
+    PDI_frames['cube_I_U'] = I_U
+    del I_U
+
+    if (PDI_frames['cube_Q'] is not None) and \
+        (PDI_frames['cube_U'] is not None):
         # Total intensity images
-        I = 1/2 * (I_Q + I_U)
-        PDI_frames['cube_I']   = I
-        PDI_frames['median_I'] = np.nanmedian(I, axis=0, keepdims=True)
+        PDI_frames['cube_I'] = 1/2 * (PDI_frames['cube_I_Q'] + \
+                                      PDI_frames['cube_I_U'])
+        PDI_frames['median_I'] = np.nanmedian(PDI_frames['cube_I'], axis=0,
+                                              keepdims=True)
 
-    if (Q is not None):
-        PDI_frames['median_Q']   = np.nanmedian(Q, axis=0, keepdims=True)
-        PDI_frames['median_I_Q'] = np.nanmedian(I_Q, axis=0, keepdims=True)
+    if (PDI_frames['cube_Q'] is not None):
+        PDI_frames['median_Q']   = np.nanmedian(PDI_frames['cube_Q'], axis=0,
+                                                keepdims=True)
+        PDI_frames['median_I_Q'] = np.nanmedian(PDI_frames['cube_I_Q'], axis=0,
+                                                keepdims=True)
 
-    if (U is not None):
-        PDI_frames['median_U']   = np.nanmedian(U, axis=0, keepdims=True)
-        PDI_frames['median_I_U'] = np.nanmedian(I_U, axis=0, keepdims=True)
+    if (PDI_frames['cube_U'] is not None):
+        PDI_frames['median_U']   = np.nanmedian(PDI_frames['cube_U'], axis=0,
+                                                keepdims=True)
+        PDI_frames['median_I_U'] = np.nanmedian(PDI_frames['cube_I_U'], axis=0,
+                                                keepdims=True)
 
     for QU_sel, I_deg in zip(['Q+', 'Q-', 'U+', 'U-'], [0, 90, 45, 135]):
 
@@ -3287,9 +3320,9 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
 
     Input
     -----
-    r : 2D-array
+    r : 1D-array
         Radius-array.
-    spm : 2D-array
+    spm : 1D-array
         Saturated pixel mask.
     r_inner_IPS : list
         Inner radii of the annuli used in IP-subtraction and ord./ext.
@@ -3297,22 +3330,22 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     r_outer_IPS : list
         Outer radii of the annuli used in IP-subtraction and ord./ext.
         re-scaling.
-    Q : 4D-array
+    Q : 3D-array
         Stokes Q observation.
-    U : 4D-array
+    U : 3D-array
         Stokes U observation.
-    I_Q : 4D-array
+    I_Q : 3D-array
         Stokes Q intensity.
-    I_U : 4D-array
+    I_U : 3D-array
         Stokes U intensity.
-    I : 4D-array
+    I : 3D-array
         Total intensity.
 
     Output
     ------
-    median_Q_IPS : 3D-array
+    median_Q_IPS : 2D-array
         Median IP-subtracted Stokes Q observation.
-    median_U_IPS : 3D-array
+    median_U_IPS : 2D-array
         Median IP-subtracted Stokes U observation.
     '''
 
@@ -3368,9 +3401,9 @@ def final_Stokes_frames(r, phi, PDI_frames, minimise_U_phi, r_crosstalk):
 
     Input
     -----
-    r : 2D-array
+    r : 1D-array
         Radius-array.
-    phi : 2D-array
+    phi : 1D-array
         Azimuthal angle.
     PDI_frames : dict
         Dictionary of images resulting from PDI.
@@ -3420,9 +3453,9 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
 
     Input
     -----
-    r : 2D-array
+    r : 1D-array
         Radius-array.
-    spm : 2D-array
+    spm : 1D-array
         Saturated pixel mask.
     r_inner_IPS : list
         Inner radii of the annuli used in IP-subtraction and ord./ext.
@@ -3514,8 +3547,9 @@ def write_header_coordinates(file, header, object_name, mask_beams):
         Filename of SCIENCE observations.
     header : astropy header
     object_name : str
-        Object's name
-    ....
+        Object's name.
+    mask_beams : 2D-array
+        Mask of the non-NaN values.
 
     Output
     ------
@@ -3575,8 +3609,9 @@ def write_header(object_name, mask_beams):
     Input
     -----
     object_name : str
-        Object's name
-    ....
+        Object's name.
+    mask_beams : 2D-array
+        Mask of the non-NaN values.
 
     Output
     ------
@@ -3670,8 +3705,8 @@ def write_header(object_name, mask_beams):
 
     return hdu
 
-def save_PDI_frames(path_output_dir, PDI_frames, object_name,
-                    mask_beams, HWP_used, pos_angle):
+def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
+                    HWP_used, pos_angle, keys='all'):
     '''
     Save the resulting images from PDI.
 
@@ -3682,10 +3717,13 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name,
     PDI_frames : dict
         Dictionary of images resulting from PDI.
     object_name : str
-        Object's name
-    ....
-    ....
-    ....
+        Object's name.
+    mask_beams : 2D-array
+        Mask of the non-NaN values.
+    HWP_used : bool
+        If True, HWP was used, else position angle was changed.
+    pos_angle : float
+        Position angle of the observation.
     '''
 
     # Make the directory for the PDI images
@@ -3693,15 +3731,27 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name,
     if not path_PDI.is_dir():
         path_PDI.mkdir()
 
+    # Convert strings to a list of strings
+    if isinstance(keys, list):
+        keys_to_save = keys
+    else:
+        if keys=='all':
+            keys_to_save = list(PDI_frames.keys())
+        else:
+            keys_to_save = list(keys)
+
     # Create a header
     mask_beams_rotated = rotate_cube(mask_beams, pos_angle, pad=False,
                                      rotate_axes=(0,1))
     hdu = write_header(object_name, mask_beams_rotated)
 
     # Save all images in the PDI_frames dictionary
-    for key in PDI_frames.keys():
+    for key in keys_to_save:
 
         im_to_save = PDI_frames[key]
+        # Remove the entry from the dictionary
+        del PDI_frames[key]
+
         if im_to_save is not None:
 
             # Move the pixel-axis to the first axis
@@ -3731,6 +3781,7 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name,
 
             write_FITS_file(Path(path_PDI, f'{key}.fits'),
                             im_to_save, header=hdu.header)
+
 
 def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         r_crosstalk, HWP_used, Wollaston_used, object_name, disk_pos_angle,
@@ -3807,6 +3858,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         print_and_log('No complete HWP cycles')
         return
 
+
     # Load the data
     beams = np.array([fits.getdata(x).astype(np.float32) \
                       for x in path_beams_files_selected])
@@ -3831,15 +3883,16 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     # Saturated-pixel mask
     spm = saturated_pixel_mask(beams, saturated_counts)
 
-    # Re-scaling the ordinary and extra-ordinary beam fluxes
-    if Wollaston_used:
-        beams = equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS)
-
     # Collapse the beams to save memory
     beams, mask_beams = collapse_beams(beams)
+
     # Flatten the other arrays
     r, phi = r[mask_beams].flatten(), phi[mask_beams].flatten()
     spm = spm[mask_beams].flatten()
+
+    # Re-scaling the ordinary and extra-ordinary beam fluxes
+    if Wollaston_used:
+        beams = equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS)
 
     # Individual Stokes frames
     ind_I, ind_QU = individual_Stokes_frames(beams)
@@ -3888,8 +3941,8 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
                                             r_deprojected**2
 
     # Save the data products
-    save_PDI_frames(path_output_dir_selected, PDI_frames,
-                    object_name, mask_beams, HWP_used, pos_angles[0])
+    save_PDI_frames(path_output_dir_selected, PDI_frames, object_name,
+                    mask_beams, HWP_used, pos_angles[0])
 
 def run_pipeline(path_SCIENCE_dir,
                  path_master_FLAT_dir='../data/master_FLAT/',
