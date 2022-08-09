@@ -1435,8 +1435,8 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
 # Sky-subtraction
 ################################################################################
 
-def background_fit(im, offset, next_offset, min_offset, y_ord_ext,
-                   remove_horizontal_stripes):
+def sky_background_fit(im, offset, next_offset, min_offset, y_ord_ext,
+                       remove_horizontal_stripes):
     '''
     Fit each row of pixels to approximate a background gradient.
 
@@ -1597,8 +1597,8 @@ def sky_subtraction_box_median(files, beam_centers, min_offset,
             for j in range(len(cube)):
                 x_j = np.nanmean(beam_centers[i][j,:,0])
                 y_j = beam_centers[i][j,:,1]
-                cube[j] -= background_fit(cube[j], x_j, x_j, min_offset, y_j,
-                                          remove_horizontal_stripes)
+                cube[j] -= sky_background_fit(cube[j], x_j, x_j, min_offset,
+                                              y_j, remove_horizontal_stripes)
 
             # Add filename
             file_skysub = Path(str(file).replace('_reduced.fits',
@@ -1713,10 +1713,10 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
         # Remove any leftover background signal with linear fits
         for j in range(len(cube)):
             y_j = beam_centers[i][j,:,1]
-            cube[j] -= background_fit(cube[j], offsets[i],
-                                      offsets[idx_next_offset],
-                                      min_offset, y_j,
-                                      remove_horizontal_stripes)
+            cube[j] -= sky_background_fit(cube[j], offsets[i],
+                                          offsets[idx_next_offset],
+                                          min_offset, y_j,
+                                          remove_horizontal_stripes)
 
         # Add filename
         file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
@@ -3113,7 +3113,7 @@ def fit_offset_angle(r, phi, PDI_frames, r_crosstalk):
     for i, theta_i in enumerate(theta_all):
 
         # Create new phi with an offset angle
-        phi_i = phi[None,:,:] + np.deg2rad(theta_i)
+        phi_i = phi[None,:] + np.deg2rad(theta_i)
 
         # Calculate U_phi with the offset angle
         U_phi_i = + PDI_frames['median_Q_IPS'] * np.sin(2*phi_i) \

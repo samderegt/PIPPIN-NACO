@@ -36,29 +36,30 @@ def main(args=None):
     args = parser.parse_args()
 
 
-    if args.run_example:
-        # Run the example reduction
-        run_example(path_cwd=path_cwd)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+
+        if args.run_example:
+            # Run the example reduction
+            run_example(path_cwd=path_cwd)
 
 
-    new_log_file = True
-    if args.prepare_calib_files:
-        # Create master FLATs, BPMs and DARKs from the provided paths
-        path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
-        = prepare_calib_files(path_SCIENCE_dir=path_cwd,
-                              path_FLAT_dir=Path(args.path_FLAT_dir),
-                              path_master_BPM_dir=Path(args.path_BPM_dir),
-                              path_DARK_dir=Path(args.path_DARK_dir)
-                              )
-        new_log_file = False
-    else:
-        path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
-        = Path(args.path_FLAT_dir), Path(args.path_BPM_dir), Path(args.path_DARK_dir)
+        new_log_file = True
+        if args.prepare_calib_files:
+            # Create master FLATs, BPMs and DARKs from the provided paths
+            path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
+            = prepare_calib_files(path_SCIENCE_dir=path_cwd,
+                                  path_FLAT_dir=Path(args.path_FLAT_dir),
+                                  path_master_BPM_dir=Path(args.path_BPM_dir),
+                                  path_DARK_dir=Path(args.path_DARK_dir)
+                                  )
+            new_log_file = False
+        else:
+            path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir \
+            = Path(args.path_FLAT_dir), Path(args.path_BPM_dir), Path(args.path_DARK_dir)
 
 
-    if args.run_pipeline and not args.run_example:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+        if args.run_pipeline and not args.run_example:
             # Run the pipeline
             run_pipeline(path_SCIENCE_dir=path_cwd,
                          path_master_FLAT_dir=path_master_FLAT_dir,
