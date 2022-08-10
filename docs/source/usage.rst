@@ -34,6 +34,7 @@ or
 
    pippin --run_pipeline --prepare_calib_files --path_FLAT_dir /path/to/FLATs/ --path_DARK_dir /path/to/DARKs/ --path_BPM_dir /path/to/master_BPM/
 
+The data reduction is separated into a pre-processing and PDI part.
 
 Pre-processing
 --------------
@@ -50,7 +51,7 @@ First, PIPPIN separates the raw SCIENCE data into different observation types wi
 - Filter
 - Observing block ID (if ``split_observing_blocks = True`` in the config-file).
 
-The results of the data reduction are stored in sub-directories of the generated :file:`pipeline_output/` directory. A log-file ``log.txt`` is created, storing information on the used reduction methods.
+The results of the data reduction are stored in sub-directories of the generated :file:`/pipeline_output/` directory. A log-file ``log.txt`` is created, storing information on the used reduction methods.
 
 The pipeline continues by DARK-subtracting and FLAT-normalising the observations. The bad pixels are replaced by the median of the surrounding box of 5x5 pixels, excluding any other bad pixels.
 
@@ -78,15 +79,25 @@ A gradient can remain in the sky-subtracted images. PIPPIN corrects for this wit
 
 Cropping and saving
 ^^^^^^^^^^^^^^^^^^^
-#   Cropping and saving beams
-The ordinary and extra-ordinary beams are cropped and saved as FITS-files, employing the ``size_to_crop`` parameter in the config-file. Any temporary data products ``_reduced.fits`` and ``_skysub.fits`` are removed if ``remove_data_products = True`` in the config-file. Open AO-loop observations are identified with an iterative sigma-clipping and the file-names are stored in ``open_loop_files.txt``. The :file:`plots/` directory stores a figure of this assessment in addition to figures of the reduction steps. 
+The ordinary and extra-ordinary beams are cropped and saved as FITS-files, employing the ``size_to_crop`` parameter in the config-file. Any temporary data products ``*_reduced.fits`` and ``*_skysub.fits`` are removed if ``remove_data_products = True`` in the config-file. Open AO-loop observations are identified with an iterative sigma-clipping and the file-names are stored in ``open_loop_files.txt``. The :file:`/plots/` directory stores a figure of this assessment in addition to figures of the reduction steps.
 
 
 Polarimetric Differential Imaging
 ---------------------------------
+The PDI part of PIPPIN begins by removing any incomplete HWP cycles and open AO-loop observations. A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be unpolarised and the annuli provided in the config-file (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
+
+.. note::
+   If the rotator was used to record different Stokes parameters, the beams are de-rotated when read.
+
+Per observation, the intensity and Stokes parameter are obtained by summing and subtracting the (extra)-ordinary beams, respectively. Next, the double-difference method is applied with the redundant observations (i.e. *Q*:math:`^+`/*Q*:math:`^-` and *U*:math:`^+`/*U*:math:`^-`).
+
+.. note::
+   If the double-difference method cannot be applied (e.g. due to observations of *Q*:math:`^+` without *Q*:math:`^-`), PIPPIN simply uses the available observations as the IP-corrected observation (e.g. :math:`Q=`*Q*:math:`^+` instead of :math:`Q=(Q^+-Q^-)/2`)
+
 #   Ord./Ext. beam equalising
 #   IP double-difference
 #   IP crosstalk correction / Uphi minimisation
+
 
 Different instrument configurations
 -----------------------------------
