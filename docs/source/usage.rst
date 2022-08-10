@@ -38,8 +38,8 @@ or
 Pre-processing
 --------------
 
-Separating the observations
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Separating observation-types
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 First, PIPPIN separates the raw SCIENCE data into different observation types with information from the headers. Observations are categorised by:
 
 - HWP/rotator-usage
@@ -50,10 +50,12 @@ First, PIPPIN separates the raw SCIENCE data into different observation types wi
 - Filter
 - Observing block ID (if ``split_observing_blocks = True`` in the config-file).
 
+The results of the data reduction are stored in sub-directories of the generated :file:`pipeline_output/` directory. A log-file ``log.txt`` is created, storing information on the used reduction methods.
+
 The pipeline continues by DARK-subtracting and FLAT-normalising the observations. The bad pixels are replaced by the median of the surrounding box of 5x5 pixels, excluding any other bad pixels.
 
-Fitting the beam-centres
-^^^^^^^^^^^^^^^^^^^^^^^^
+Beam-centre fitting
+^^^^^^^^^^^^^^^^^^^
 Next, PIPPIN locates the centres of the ordinary and extra-ordinary beams. PIPPIN provides several methods for fitting the beam-centres (``centering_method`` in the config-file):
 
 - ``maximum``: The maximum pixel in an image median-filtered with a 3x3 kernel.
@@ -77,6 +79,8 @@ A gradient can remain in the sky-subtracted images. PIPPIN corrects for this wit
 Cropping and saving
 ^^^^^^^^^^^^^^^^^^^
 #   Cropping and saving beams
+The ordinary and extra-ordinary beams are cropped and saved as FITS-files, employing the ``size_to_crop`` parameter in the config-file. Any temporary data products ``_reduced.fits`` and ``_skysub.fits`` are removed if ``remove_data_products = True`` in the config-file. Open AO-loop observations are identified with an iterative sigma-clipping and the file-names are stored in ``open_loop_files.txt``. The :file:`plots/` directory stores a figure of this assessment in addition to figures of the reduction steps. 
+
 
 Polarimetric Differential Imaging
 ---------------------------------
