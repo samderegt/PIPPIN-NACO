@@ -3925,8 +3925,9 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         r_deprojected = r_deprojected[mask_beams].flatten()
 
         # Final Stokes frames
-        PDI_frames, phi = final_Stokes_frames(r_deprojected, phi, PDI_frames,
-                                              minimise_U_phi, r_crosstalk)
+        PDI_frames, phi = final_Stokes_frames(r_deprojected, phi,
+                                              PDI_frames, minimise_U_phi,
+                                              r_crosstalk)
 
         # r^2-scaled Stokes parameters
         PDI_frames['P_I_r2']   = PDI_frames['P_I'] * r_deprojected**2
