@@ -30,4 +30,4 @@ The PDI technique is applied to the cropped-out beams and a series of correction
 
 The images above show the result of only 2 HWP cycles and thus have a lower signal-to-noise than the combination of all 16 cycles.
 
-In the :ref:`next section <./source/usage.rst/Usage instructions>` we will learn how to reduce other NACO polarimetric datasets.
+In the :ref:`next section <Usage instructions>` we will learn how to reduce other NACO polarimetric datasets.

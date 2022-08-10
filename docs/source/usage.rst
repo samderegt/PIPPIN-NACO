@@ -9,7 +9,7 @@ Usage instructions
 
 Running PIPPIN
 --------------
-PIPPIN requires the raw SCIENCE FITS-files to be uncompressed and stored in a directory (e.g. :file:`example_HD_135344B/`). In the same directory, PIPPIN will search for a configuration file named :file:`config.conf`. A configuration file with default parameters can be created if PIPPIN cannot find it.
+PIPPIN requires the raw SCIENCE FITS-files to be uncompressed and stored in a directory (e.g. :file:`example_HD_135344B/`). In the same directory, PIPPIN will search for a configuration file named :file:`config.conf`. A :ref:`configuration file <Configuration file>` with default parameters can be created if PIPPIN cannot find it.
 
 To calibrate the SCIENCE images, PIPPIN makes use of master FLATs, BPMs (Bad-Pixel Masks), and DARKs. On our `GitHub repository <https://github.com/samderegt/PIPPIN-NACO/tree/master/pippin/data>`_, we have made some calibration files available, covering different epochs. When running the pipeline from a terminal, one should add the paths to these master calibration files as:
 ::
@@ -49,7 +49,7 @@ First, PIPPIN separates the raw SCIENCE data into different observation types wi
 - Window shape
 - Exposure time
 - Filter
-- Observing block ID (if ``split_observing_blocks = True`` in the config-file).
+- Observing block ID (if ``split_observing_blocks = True``; :ref:`config-file <Configuration file>`).
 
 The results of the data reduction are stored in sub-directories of the generated :file:`pipeline_output/` directory. A log-file ``log.txt`` is created, storing information on the used reduction methods.
 
@@ -57,29 +57,29 @@ The pipeline continues by DARK-subtracting and FLAT-normalising the observations
 
 Beam-centre fitting
 ^^^^^^^^^^^^^^^^^^^
-Next, PIPPIN locates the centres of the ordinary and extra-ordinary beams. PIPPIN provides several methods for fitting the beam-centres (``centering_method`` in the config-file):
+Next, PIPPIN locates the centres of the ordinary and extra-ordinary beams. PIPPIN provides several methods for fitting the beam-centres (``centering_method``; :ref:`config-file <Configuration file>`):
 
 - ``maximum``: The maximum pixel in an image median-filtered with a 3x3 kernel.
 - ``single-Moffat``: A single 2D Moffat function (for each beam).
 - ``double-Moffat``: Two 2D Moffat functions (for each beam) subtracted from each other to replicate the flat top of a saturated beam.
 
-The two Moffat fitting methods allow the beam-offset to be tied, based on the expected pixel-separation with the utilised detector (``tied_offset = True`` in the config-file). The tied offset is useful when the stellar light does not form a point source (e.g. for embedded stars).
+The two Moffat fitting methods allow the beam-offset to be tied, based on the expected pixel-separation with the utilised detector (``tied_offset = True``; :ref:`config-file <Configuration file>`). The tied offset is useful when the stellar light does not form a point source (e.g. for embedded stars).
 
 .. note::
    Only one beam is identified if the data consists of wiregrid-observations instead of Wollaston-observations.
 
 Sky-subtraction
 ^^^^^^^^^^^^^^^
-The sky-subtraction can be performed with one of the following methods (``sky_subtraction_method`` in the config-file):
+The sky-subtraction can be performed with one of the following methods (``sky_subtraction_method``; :ref:`config-file <Configuration file>`):
 
 - ``box-median``: The sky-signal is estimated from the median signal of pixels which are at least ``sky_subtraction_min_offset`` to the left or right of the assessed beam centres.
 - ``dithering-offset``: Observations with different dithering positions are subtracted from each other. The two observations must be separated by ``sky_subtraction_min_offset``, otherwise the ``box_median`` method is utilised.
 
-A gradient can remain in the sky-subtracted images. PIPPIN corrects for this with a linear fit to rows of pixels. If ``remove_horizontal_stripes = False`` in the config-file, 5 rows will be binned and the final gradient image will be smoothed and subtracted. A read-out artefact can leave behind horizontal stripes which can be removed with a more aggressive fitting of each row, using ``remove_horizontal_stripes = True``.
+A gradient can remain in the sky-subtracted images. PIPPIN corrects for this with a linear fit to rows of pixels. If ``remove_horizontal_stripes = False`` (:ref:`config-file <Configuration file>`), 5 rows will be binned and the final gradient image will be smoothed and subtracted. A read-out artefact can leave behind horizontal stripes which can be removed with a more aggressive fitting of each row, using ``remove_horizontal_stripes = True``.
 
 Cropping and saving
 ^^^^^^^^^^^^^^^^^^^
-The ordinary and extra-ordinary beams are cropped and saved as FITS-files, employing the ``size_to_crop`` parameter in the config-file. Any temporary data products ``*_reduced.fits`` and ``*_skysub.fits`` are removed if ``remove_data_products = True`` in the config-file. Open AO-loop observations are identified with an iterative sigma-clipping and the file-names are stored in ``open_loop_files.txt``. The :file:`plots/` directory stores a figure of this assessment in addition to figures of the reduction steps.
+The ordinary and extra-ordinary beams are cropped and saved as FITS-files, employing the ``size_to_crop`` parameter (:ref:`config-file <Configuration file>`). Any temporary data products ``*_reduced.fits`` and ``*_skysub.fits`` are removed if ``remove_data_products = True`` (:ref:`config-file <Configuration file>`). Open AO-loop observations are identified with an iterative sigma-clipping and the file-names are stored in ``open_loop_files.txt``. The :file:`plots/` directory stores a figure of this assessment in addition to figures of the reduction steps.
 
 
 Polarimetric Differential Imaging
@@ -88,7 +88,7 @@ The PDI part of PIPPIN begins by removing any incomplete HWP cycles and open AO-
 
 Instrumental polarisation
 ^^^^^^^^^^^^^^^^^^^^^^^^^
-A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be unpolarised and the annuli provided in the config-file (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
+A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be unpolarised and the annuli provided in the :ref:`config-file <Configuration file>` (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
 
 .. note::
    If the rotator was used to record different Stokes parameters, the beams are de-rotated when read.
@@ -98,11 +98,11 @@ Per observation, the intensity and Stokes parameter are obtained by summing and 
 .. note::
    If the double-difference method cannot be applied (e.g. due to observations of :math:`Q^+` without :math:`Q^-`), PIPPIN simply uses the available observations as the IP-corrected observation (e.g. :math:`Q=Q^+` instead of :math:`Q=(Q^+-Q^-)/2`)
 
-If ``crosstalk_correction = True`` in the config-file, PIPPIN evaluates and correct for the reduced efficiency of the Stokes :math:`U` parameter which originates from crosstalk between the components of the Stokes vector. Following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an annulus is used to minimise the number of pixels where a higher signal in :math:`Q` compared to :math:`U`. The ``r_crosstalk`` parameter in the config-file gives the inner and outer radii of this annulus.
+If ``crosstalk_correction = True`` (:ref:`config-file <Configuration file>`), PIPPIN evaluates and correct for the reduced efficiency of the Stokes :math:`U` parameter which originates from crosstalk between the components of the Stokes vector. Following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an annulus is used to minimise the number of pixels where a higher signal in :math:`Q` compared to :math:`U`. The ``r_crosstalk`` parameter in the :ref:`config-file <Configuration file>` gives the inner and outer radii of this annulus.
 
 Using the annuli described with the ``r_inner_IPS`` and ``r_outer_IPS`` parameters, PIPPIN corrects for the polarisation that is measured near the image centre. Any polarised signal found near the stellar signal is believed to originate from IP, because the stellar signal is assumed to be un-polarised. This correction is performed for each HWP-cycle, thus avoiding temporal differences in the instrument configuration and IP.
 
-Finally, the :math:`U_\phi`-signal in the ``r_crosstalk`` annulus is minimised if requested (``minimise_U_phi = True`` in the config-file). As described by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an offset-angle can be estimated for the azimuthal Stokes parameters :math:`Q_\phi` and :math:`U_\phi`.
+Finally, the :math:`U_\phi`-signal in the ``r_crosstalk`` annulus is minimised if requested (``minimise_U_phi = True``; :ref:`config-file <Configuration file>`). As described by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an offset-angle can be estimated for the azimuthal Stokes parameters :math:`Q_\phi` and :math:`U_\phi`.
 
 .. attention::
    Minimising the :math:`U_\phi`-signal should be done with caution as it can lead to the removal of real :math:`Q_\phi`-signal in high-inclination disks or in cases where crosstalk and IP have not been sufficiently corrected.
