@@ -12,7 +12,7 @@ To run the example reduction, navigate to any directory in the terminal and type
 PIPPIN attempts to find the required data in your current directory. If these files do not exist, they can be downloaded (with an internet connection) from the `GitHub repository <https://github.com/samderegt/PIPPIN-NACO/tree/master/pippin/example_HD_135344B>`_ (48.4 MB). After successfully downloading the data, which includes SCIENCE, FLAT, and DARK observations, as well as a configuration-file with input parameters (:file:`config.conf`), PIPPIN begins the reduction.
 
 .. note::
-   A discussion of the input parameters in :file:`config.conf` can be found :ref:`here <./source/configfile.rst/Configuration file>`_.
+   A discussion of the input parameters in :file:`config.conf` can be found :ref:`here <Configuration file>`.
 
 As the pipeline is running, information is printed in the terminal and stored in the :file:`example_HD_135344B/pipeline_output/log.txt` file. First, the FLATs and DARKs are median-combined into master FLATs and master DARKs per observation type. In this example, there is only one calibration observation per type. The master FLATs are normalized to unity. Master bad-pixel masks (BPMs) are created from the non-linear pixel response between FLAT observations with the FLAT-lamp on or off.
 
@@ -30,4 +30,4 @@ The PDI technique is applied to the cropped-out beams and a series of correction
 
 The images above show the result of only 2 HWP cycles and thus have a lower signal-to-noise than the combination of all 16 cycles.
 
-In the :ref:`next section <./source/usage.rst/Usage instructions>`_ we will learn how to reduce other NACO polarimetric datasets.
+In the :ref:`next section <./source/usage.rst/Usage instructions>` we will learn how to reduce other NACO polarimetric datasets.
