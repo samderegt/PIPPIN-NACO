@@ -109,7 +109,43 @@ Finally, the :math:`U_\phi`-signal in the ``r_crosstalk`` annulus is minimised i
 
 PDI data products
 ^^^^^^^^^^^^^^^^^
-The :file:`PDI/`
+The :file:`PDI/` directory
+
+- :file:`cube_I.fits`
+- :file:`cube_I_Q+.fits`
+- :file:`cube_I_Q-.fits`
+- :file:`cube_I_Q.fits`
+- :file:`cube_I_U+.fits`
+- :file:`cube_I_U-.fits`
+- :file:`cube_I_U.fits`
+- :file:`cube_Q+.fits`
+- :file:`cube_Q-.fits`
+- :file:`cube_Q.fits`
+- :file:`cube_U+.fits`
+- :file:`cube_U-.fits`
+- :file:`cube_U.fits`
+- :file:`median_I.fits`
+- :file:`median_I_Q+.fits`
+- :file:`median_I_Q-.fits`
+- :file:`median_I_Q.fits`
+- :file:`median_I_U+.fits`
+- :file:`median_I_U-.fits`
+- :file:`median_I_U.fits`
+- :file:`median_Q+.fits`
+- :file:`median_Q-.fits`
+- :file:`median_Q.fits`
+- :file:`median_Q_IPS.fits`
+- :file:`median_U+.fits`
+- :file:`median_U-.fits`
+- :file:`median_U.fits`
+- :file:`median_U_IPS.fits`
+- :file:`P_I.fits`
+- :file:`P_I_r2.fits`
+- :file:`Q_phi.fits`
+- :file:`Q_phi_r2.fits`
+- :file:`r.fits`
+- :file:`U_phi.fits`
+
 
 Different instrument configurations
 -----------------------------------

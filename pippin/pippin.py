@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LogNorm, SymLogNorm
-#mpl.use('agg')
+mpl.use('agg')
 
 from astropy.io import fits
 from astropy.modeling import models, fitting
@@ -1350,12 +1350,17 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
         ord_beam_i, ext_beam_i = [], []
         for j, im in enumerate(cube):
 
+            # Padding the image for large cropping sizes
+            pad_width = ((0, 0), (im.shape[1], im.shape[1]))
+            im = np.pad(im, pad_width, constant_values=0.0)
+
             # Mask of values outside the image
             im_mask = (im == 0)
 
             # Shift the ordinary beam to the center of the image
             y_shift = im.shape[0]/2 - (beam_centers[i][j,0,1] - yp.min()) - 1/2
-            x_shift = im.shape[1]/2 - (beam_centers[i][j,0,0] - xp.min()) - 1/2
+            x_shift = im.shape[1]/2 - (beam_centers[i][j,0,0] + pad_width[1][0]
+                                       - xp.min()) - 1/2
             ord_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
             # Replace values outside of image with 0
             ord_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
@@ -1364,7 +1369,8 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
 
             # Shift the extra-ordinary beam to the center of the image
             y_shift = im.shape[0]/2 - (beam_centers[i][j,1,1] - yp.min()) - 1/2
-            x_shift = im.shape[1]/2 - (beam_centers[i][j,1,0] - xp.min()) - 1/2
+            x_shift = im.shape[1]/2 - (beam_centers[i][j,1,0] + pad_width[1][0]
+                                       - xp.min()) - 1/2
             ext_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
             # Replace values outside of image with 0
             ext_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
@@ -1530,11 +1536,12 @@ def sky_background_fit(im, offset, next_offset, min_offset, y_ord_ext,
                                                 axis=0)
                 im_masked_median = im_masked_median[np.isfinite(im_masked_median)]
 
-            p = fit_p(p_init, xp_masked, im_masked_median)
+            if np.isfinite(im_masked_median).any():
+                p = fit_p(p_init, xp_masked, im_masked_median)
 
-            # Store the horizontal representation
-            for j in range(i_min, i_max+1):
-                background_model[j] = p(xp[j])
+                # Store the horizontal representation
+                for j in range(i_min, i_max+1):
+                    background_model[j] = p(xp[j])
 
     if not remove_horizontal_stripes:
         # Smoothen the horizontal polynomial models
@@ -2727,7 +2734,7 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
                     )
         cube = np.pad(cube, pad_width, constant_values=0.0)
 
-        mask = np.isnan(cube)
+        mask = np.ma.mask_or(np.isnan(cube), (cube==0.0))
         cube[mask] = 0
 
         # Rotate a cube
@@ -2743,8 +2750,8 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
         # Line through the image centre
         xc = (cube.shape[rotate_axes[1]]-1)/2
         yc = (cube.shape[rotate_axes[0]]-1)/2
-        x = np.linspace(-500, 500, 2000) * np.cos(pos_angle_rad) + xc
-        y = -np.linspace(-500, 500, 2000) * np.sin(pos_angle_rad) + yc
+        x = np.linspace(-1024, 1024, 2000) * np.cos(pos_angle_rad) + xc
+        y = -np.linspace(-1024, 1024, 2000) * np.sin(pos_angle_rad) + yc
 
         # Bounding lines
         x1 = -(cube.shape[rotate_axes[0]]//2 - pad_width[1][0]) * \
@@ -2761,10 +2768,10 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
 
         # Interpolate onto the image grid
         xv = xp[0]
-        y1 = np.interp(xv, np.sort(x1), y1[np.argsort(x1)])
-        y2 = np.interp(xv, np.sort(x2), y2[np.argsort(x2)])
-        y_min = np.min(np.array([y1,y2]), axis=0)
-        y_max = np.max(np.array([y1,y2]), axis=0)
+        y1_new = np.interp(xv, np.sort(x1), y1[np.argsort(x1)])
+        y2_new = np.interp(xv, np.sort(x2), y2[np.argsort(x2)])
+        y_min = np.min(np.array([y1_new,y2_new]), axis=0)
+        y_max = np.max(np.array([y1_new,y2_new]), axis=0)
 
         # Set pixels outside the polarimetric mask to NaN
         rotated_cube[:,~((yp >= y_min) & (yp <= y_max))] = np.nan
@@ -2800,7 +2807,6 @@ def collapse_beams(beams):
     mask : 2D-array
         Mask of the non-NaN values.
     '''
-
     # Locate all the NaNs in the beams and mask them
     mask = ~ np.all(np.isnan(beams), axis=(0,1))
     masked_beams = beams[:,:,mask]
@@ -2978,11 +2984,8 @@ def saturated_pixel_mask(beams, saturated_counts):
     '''
 
     # Mask saturated pixels
-    spm = np.ones(beams.shape)
-    spm[beams > saturated_counts] = 0
-
-    # Multiply over all observations
-    spm = np.prod(spm, axis=(0,1))
+    spm = np.ones(beams.shape[2:])
+    spm[beams.max(axis=(0,1)) > saturated_counts] = 0
 
     return spm
 
@@ -3190,63 +3193,72 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
 
     print_and_log('--- Double-difference method to remove instrumental polarisation (IP)')
 
+    # Save the Q, U and I images to a dictionary
+    PDI_frames = dict()
+
     mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
     mask_U = np.ma.mask_or((StokesPara=='U+'), (StokesPara=='U-'))
 
     if len(np.unique(StokesPara)) == 4:
         # Stokes Q, U images
-        Q = 1/2 * (ind_QU[StokesPara=='Q+'] - ind_QU[StokesPara=='Q-'])
-        U = 1/2 * (ind_QU[StokesPara=='U+'] - ind_QU[StokesPara=='U-'])
+        PDI_frames['cube_Q'] = 1/2 * (ind_QU[StokesPara=='Q+'] -
+                                      ind_QU[StokesPara=='Q-'])
+        PDI_frames['cube_U'] = 1/2 * (ind_QU[StokesPara=='U+'] -
+                                      ind_QU[StokesPara=='U-'])
 
         # Stokes Q, U intensity images
-        I_Q = 1/2 * (ind_I[StokesPara=='Q+'] + ind_I[StokesPara=='Q-'])
-        I_U = 1/2 * (ind_I[StokesPara=='U+'] + ind_I[StokesPara=='U-'])
+        PDI_frames['cube_I_Q'] = 1/2 * (ind_I[StokesPara=='Q+'] +
+                                        ind_I[StokesPara=='Q-'])
+        PDI_frames['cube_I_U'] = 1/2 * (ind_I[StokesPara=='U+'] +
+                                        ind_I[StokesPara=='U-'])
 
     elif mask_Q.any() and mask_U.any():
 
         # Stokes Q, U images
-        Q = ind_QU[mask_Q]
-        U = ind_QU[mask_U]
+        PDI_frames['cube_Q'] = ind_QU[mask_Q]
+        PDI_frames['cube_U'] = ind_QU[mask_U]
 
         # Flip the sign of negative measurements
-        Q[StokesPara[mask_Q]=='Q-'] *= -1
-        U[StokesPara[mask_U]=='U-'] *= -1
+        PDI_frames['cube_Q'][StokesPara[mask_Q]=='Q-'] *= -1
+        PDI_frames['cube_U'][StokesPara[mask_U]=='U-'] *= -1
 
         # Stokes Q, U intensity images
-        I_Q = ind_I[mask_Q]
-        I_U = ind_I[mask_U]
+        PDI_frames['cube_I_Q'] = ind_I[mask_Q]
+        PDI_frames['cube_I_U'] = ind_I[mask_U]
 
     else:
 
         # Stokes Q, U images
-        Q, U, I_Q, I_U = None, None, None, None
+        PDI_frames = {'cube_Q': None, 'cube_U': None,
+                      'cube_I_Q': None, 'cube_I_U': None}
 
         if mask_Q.any():
-            Q = ind_QU[mask_Q]
-            Q[StokesPara[mask_Q]=='Q-'] *= -1 # Flip the sign
+            PDI_frames['cube_Q'] = ind_QU[mask_Q]
+            PDI_frames['cube_Q'][StokesPara[mask_Q]=='Q-'] *= -1 # Flip the sign
 
-            I_Q = ind_I[mask_Q]
+            PDI_frames['cube_I_Q'] = ind_I[mask_Q]
 
         elif mask_U.any():
-            U = ind_QU[mask_U]
-            U[StokesPara[mask_U]=='U-'] *= -1 # Flip the sign
+            PDI_frames['cube_U'] = ind_QU[mask_U]
+            PDI_frames['cube_U'][StokesPara[mask_U]=='U-'] *= -1 # Flip the sign
 
-            I_U = ind_I[mask_U]
+            PDI_frames['cube_I_U'] = ind_I[mask_U]
 
     # Determine the U crosstalk-efficiency and correct
-    if crosstalk_correction and (Q is not None) and (U is not None):
+    if crosstalk_correction and (PDI_frames['cube_Q'] is not None) and \
+        (PDI_frames['cube_U'] is not None):
 
         print_and_log('--- Correcting for the crosstalk-efficiency of U')
 
         # Applied to the median Q/U images
-        median_Q = np.nanmedian(Q, axis=0)
-        median_U = np.nanmedian(U, axis=0)
-        median_I_Q = np.nanmedian(I_Q, axis=0)
-        median_I_U = np.nanmedian(I_U, axis=0)
+        median_Q = np.nanmedian(PDI_frames['cube_Q'], axis=0)
+        median_U = np.nanmedian(PDI_frames['cube_U'], axis=0)
+        median_I_Q = np.nanmedian(PDI_frames['cube_I_Q'], axis=0)
+        median_I_U = np.nanmedian(PDI_frames['cube_I_U'], axis=0)
 
         # Loop over the ord./ext. flux-scaling annuli
         e_U_all = []
-        for j in range(Q.shape[-1]):
+        for j in range(PDI_frames['cube_Q'].shape[-1]):
             e_U = fit_U_efficiency(median_Q[:,j], median_U[:,j],
                                    median_I_Q[:,j], median_I_U[:,j],
                                    r, r_crosstalk)
@@ -3256,19 +3268,8 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         print_and_log(f'    Efficiency per IPS annulus: e_U = {list(e_U_all)}')
 
         # Correct for the reduced efficiency
-        U   /= e_U_all[None,None,:]
-        I_U /= e_U_all[None,None,:]
-
-    # Save the Q, U and I images to a dictionary
-    PDI_frames = dict()
-    PDI_frames['cube_Q'] = Q
-    del Q
-    PDI_frames['cube_U'] = U
-    del U
-    PDI_frames['cube_I_Q'] = I_Q
-    del I_Q
-    PDI_frames['cube_I_U'] = I_U
-    del I_U
+        PDI_frames['cube_U']   /= e_U_all[None,None,:]
+        PDI_frames['cube_I_U'] /= e_U_all[None,None,:]
 
     if (PDI_frames['cube_Q'] is not None) and \
         (PDI_frames['cube_U'] is not None):
@@ -3292,24 +3293,30 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
 
     for QU_sel, I_deg in zip(['Q+', 'Q-', 'U+', 'U-'], [0, 90, 45, 135]):
 
-        if np.any(StokesPara == QU_sel):
+        mask_QU_sel = (StokesPara == QU_sel)
+        if QU_sel[1]=='+':
+            mask_QU_sel_alt = (StokesPara == QU_sel.replace('+','-'))
+        elif QU_sel[1]=='-':
+            mask_QU_sel_alt = (StokesPara == QU_sel.replace('-','+'))
+
+        if np.any(mask_QU_sel) and np.any(mask_QU_sel_alt):
             if Wollaston_used:
                 # Save the individual Q+- and U+- measurements
-                PDI_frames[f'cube_I_{QU_sel}'] = ind_I[StokesPara==QU_sel]
+                PDI_frames[f'cube_I_{QU_sel}'] = ind_I[mask_QU_sel]
                 PDI_frames[f'median_I_{QU_sel}'] \
-                = np.nanmedian(ind_I[StokesPara==QU_sel],
+                = np.nanmedian(ind_I[mask_QU_sel],
                                axis=0, keepdims=True)
 
-                PDI_frames[f'cube_{QU_sel}'] = ind_QU[StokesPara==QU_sel]
+                PDI_frames[f'cube_{QU_sel}'] = ind_QU[mask_QU_sel]
                 PDI_frames[f'median_{QU_sel}'] \
-                = np.nanmedian(ind_QU[StokesPara==QU_sel],
+                = np.nanmedian(ind_QU[mask_QU_sel],
                                axis=0, keepdims=True)
 
             else:
                 # Save the measurements
-                PDI_frames[f'cube_I_{I_deg}_deg'] = ind_I[StokesPara==QU_sel]
+                PDI_frames[f'cube_I_{I_deg}_deg'] = ind_I[mask_QU_sel]
                 PDI_frames[f'median_I_{I_deg}_deg'] \
-                = np.nanmedian(ind_I[StokesPara==QU_sel],
+                = np.nanmedian(ind_I[mask_QU_sel],
                                axis=0, keepdims=True)
 
     return PDI_frames
@@ -3740,10 +3747,20 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
         else:
             keys_to_save = list(keys)
 
+    array_size = []
+    for key in keys_to_save:
+        if PDI_frames[key] is not None:
+            array_size.append(PDI_frames[key].size)
+        else:
+            array_size.append(np.inf)
+
+    keys_to_save = np.array(keys_to_save)[np.argsort(array_size)]
+
     # Create a header
     mask_beams_rotated = rotate_cube(mask_beams, pos_angle, pad=False,
                                      rotate_axes=(0,1))
     hdu = write_header(object_name, mask_beams_rotated)
+    del mask_beams_rotated
 
     # Save all images in the PDI_frames dictionary
     for key in keys_to_save:
@@ -3770,18 +3787,23 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
                 new_im_to_save = np.swapaxes(new_im_to_save, 0, 1)
 
             im_to_save = new_im_to_save
+            del new_im_to_save
 
             # Remove axes of length 1
             im_to_save = np.squeeze(im_to_save)
 
+            if len(im_to_save.shape) == 2:
+                im_to_save = im_to_save[None,:]
+
             if HWP_used:
                 # Rotate the image
-                im_to_save = rotate_cube(im_to_save, pos_angle, pad=False,
+                im_to_save = rotate_cube(im_to_save, pos_angle, pad=True,
                                          rotate_axes=(-2,-1))
 
             write_FITS_file(Path(path_PDI, f'{key}.fits'),
                             im_to_save, header=hdu.header)
 
+        del im_to_save
 
 def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         r_crosstalk, HWP_used, Wollaston_used, object_name, disk_pos_angle,
@@ -3860,8 +3882,8 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
 
 
     # Load the data
-    beams = np.array([fits.getdata(x).astype(np.float32) \
-                      for x in path_beams_files_selected])
+    beams = [fits.getdata(x).astype(np.float32) \
+             for x in path_beams_files_selected]
 
     pos_angles = np.array([-(fits.getval(x, 'ESO ADA POSANG'))
                            for x in path_beams_files_selected])
@@ -3869,12 +3891,10 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     if not HWP_used:
 
         # Rotate the frames if HWP was not used
-        rotated_beams = []
-        for beams_i, pos_angle_i in zip(beams, pos_angles):
-            rotated_beams_i = rotate_cube(beams_i, pos_angle_i, pad=True)
-            rotated_beams.append(rotated_beams_i)
+        for i, pos_angle_i in enumerate(pos_angles):
+            beams[i] = rotate_cube(beams[i], pos_angle_i, pad=True)
 
-        beams = np.array(rotated_beams)
+    beams = np.array(beams)
 
     xc, yc = (beams.shape[3]-1)/2, (beams.shape[2]-1)/2
     r, phi = r_phi(beams[0,0], xc, yc)
@@ -3896,11 +3916,13 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
 
     # Individual Stokes frames
     ind_I, ind_QU = individual_Stokes_frames(beams)
+    del beams
 
     # Double-difference
     PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
                                    crosstalk_correction, r, r_crosstalk,
                                    Wollaston_used)
+    del ind_I, ind_QU
 
     if (PDI_frames['cube_Q'] is not None) and \
        (PDI_frames['cube_U'] is not None):
@@ -3940,6 +3962,10 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
                                                 r_outer_IPS, PDI_frames)
             PDI_frames['P_I_extended_r2'] = PDI_frames['P_I_extended'] * \
                                             r_deprojected**2
+
+        del r_deprojected, xp, yp
+
+    del r, phi, spm
 
     # Save the data products
     save_PDI_frames(path_output_dir_selected, PDI_frames, object_name,
