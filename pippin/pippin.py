@@ -428,6 +428,8 @@ def write_FITS_file(path_to_file, cube, header=None):
     fits.writeto(path_to_file, cube.astype(np.float32), header,
                  output_verify='silentfix', overwrite=True)
 
+    return path_to_file
+
 def read_FITS_as_cube(path_to_file):
     '''
     Read a FITS file as a cube, reshape if necessary.
@@ -3162,7 +3164,7 @@ def individual_Stokes_frames(beams):
 
 def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
                       crosstalk_correction, r, r_crosstalk,
-                      Wollaston_used):
+                      Wollaston_used, path_PDI):
     '''
     Apply the double-difference method to remove instrumental polarisation.
 
@@ -3184,6 +3186,8 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         Inner and outer radius of the annulus used to correct for crosstalk.
     Wollaston_used : bool
         If True, Wollaston was used, else wiregrid was used.
+    path_PDI : str
+        Path to PDI output directory.
 
     Output
     ------
@@ -3244,6 +3248,12 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
 
             PDI_frames['cube_I_U'] = ind_I[mask_U]
 
+    # Save PDI frames to disk and replace with path to save memory
+    for key in PDI_frames.keys():
+        if PDI_frames[key] is not None:
+            PDI_frames[key] = write_FITS_file(Path(path_PDI, f'{key}.fits'),
+                                              PDI_frames[key])
+
     # Determine the U crosstalk-efficiency and correct
     if crosstalk_correction and (PDI_frames['cube_Q'] is not None) and \
         (PDI_frames['cube_U'] is not None):
@@ -3251,14 +3261,16 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         print_and_log('--- Correcting for the crosstalk-efficiency of U')
 
         # Applied to the median Q/U images
-        median_Q = np.nanmedian(PDI_frames['cube_Q'], axis=0)
-        median_U = np.nanmedian(PDI_frames['cube_U'], axis=0)
-        median_I_Q = np.nanmedian(PDI_frames['cube_I_Q'], axis=0)
-        median_I_U = np.nanmedian(PDI_frames['cube_I_U'], axis=0)
+        median_Q = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_Q'), axis=0)
+        median_U = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_U'), axis=0)
+        median_I_Q = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_I_Q'),
+                                  axis=0)
+        median_I_U = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_I_U'),
+                                  axis=0)
 
         # Loop over the ord./ext. flux-scaling annuli
         e_U_all = []
-        for j in range(PDI_frames['cube_Q'].shape[-1]):
+        for j in range(median_Q.shape[-1]):
             e_U = fit_U_efficiency(median_Q[:,j], median_U[:,j],
                                    median_I_Q[:,j], median_I_U[:,j],
                                    r, r_crosstalk)
@@ -3268,28 +3280,34 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         print_and_log(f'    Efficiency per IPS annulus: e_U = {list(e_U_all)}')
 
         # Correct for the reduced efficiency
-        PDI_frames['cube_U']   /= e_U_all[None,None,:]
-        PDI_frames['cube_I_U'] /= e_U_all[None,None,:]
+        PDI_frames['cube_U']   = load_PDI_frames(PDI_frames, 'cube_U')
+        PDI_frames['cube_I_U'] = load_PDI_frames(PDI_frames, 'cube_I_U')
+        for key in ['cube_U', 'cube_I_U']:
+            PDI_frames[key] /= e_U_all[None,None,:]
 
     if (PDI_frames['cube_Q'] is not None) and \
         (PDI_frames['cube_U'] is not None):
         # Total intensity images
-        PDI_frames['cube_I'] = 1/2 * (PDI_frames['cube_I_Q'] + \
-                                      PDI_frames['cube_I_U'])
+        PDI_frames['cube_I'] = 1/2 * (load_PDI_frames(PDI_frames, 'cube_I_Q') +
+                                      load_PDI_frames(PDI_frames, 'cube_I_U'))
         PDI_frames['median_I'] = np.nanmedian(PDI_frames['cube_I'], axis=0,
                                               keepdims=True)
 
     if (PDI_frames['cube_Q'] is not None):
-        PDI_frames['median_Q']   = np.nanmedian(PDI_frames['cube_Q'], axis=0,
-                                                keepdims=True)
-        PDI_frames['median_I_Q'] = np.nanmedian(PDI_frames['cube_I_Q'], axis=0,
-                                                keepdims=True)
+        PDI_frames['median_Q']   = np.nanmedian(load_PDI_frames(PDI_frames,
+                                                                'cube_Q'),
+                                                axis=0, keepdims=True)
+        PDI_frames['median_I_Q'] = np.nanmedian(load_PDI_frames(PDI_frames,
+                                                                'cube_I_Q'),
+                                                axis=0, keepdims=True)
 
     if (PDI_frames['cube_U'] is not None):
-        PDI_frames['median_U']   = np.nanmedian(PDI_frames['cube_U'], axis=0,
-                                                keepdims=True)
-        PDI_frames['median_I_U'] = np.nanmedian(PDI_frames['cube_I_U'], axis=0,
-                                                keepdims=True)
+        PDI_frames['median_U']   = np.nanmedian(load_PDI_frames(PDI_frames,
+                                                                'cube_U'),
+                                                axis=0, keepdims=True)
+        PDI_frames['median_I_U'] = np.nanmedian(load_PDI_frames(PDI_frames,
+                                                                'cube_I_U'),
+                                                axis=0, keepdims=True)
 
     for QU_sel, I_deg in zip(['Q+', 'Q-', 'U+', 'U-'], [0, 90, 45, 135]):
 
@@ -3319,6 +3337,10 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
                 = np.nanmedian(ind_I[mask_QU_sel],
                                axis=0, keepdims=True)
 
+    for key in PDI_frames.keys():
+        if isinstance(PDI_frames[key], np.ndarray):
+            PDI_frames[key] = write_FITS_file(Path(path_PDI, f'{key}.fits'),
+                                              PDI_frames[key])
     return PDI_frames
 
 def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
@@ -3712,15 +3734,15 @@ def write_header(object_name, mask_beams):
 
     return hdu
 
-def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
+def save_PDI_frames(path_PDI, PDI_frames, object_name, mask_beams,
                     HWP_used, pos_angle, keys='all'):
     '''
     Save the resulting images from PDI.
 
     Input
     -----
-    path_output_dir : str
-        Path to output directory.
+    path_PDI : str
+        Path to PDI output directory.
     PDI_frames : dict
         Dictionary of images resulting from PDI.
     object_name : str
@@ -3733,11 +3755,6 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
         Position angle of the observation.
     '''
 
-    # Make the directory for the PDI images
-    path_PDI = Path(path_output_dir, 'PDI')
-    if not path_PDI.is_dir():
-        path_PDI.mkdir()
-
     # Convert strings to a list of strings
     if isinstance(keys, list):
         keys_to_save = keys
@@ -3749,7 +3766,7 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
 
     array_size = []
     for key in keys_to_save:
-        if PDI_frames[key] is not None:
+        if isinstance(PDI_frames[key], np.ndarray):
             array_size.append(PDI_frames[key].size)
         else:
             array_size.append(np.inf)
@@ -3765,7 +3782,7 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
     # Save all images in the PDI_frames dictionary
     for key in keys_to_save:
 
-        im_to_save = PDI_frames[key]
+        im_to_save = load_PDI_frames(PDI_frames, key)
         # Remove the entry from the dictionary
         del PDI_frames[key]
 
@@ -3797,13 +3814,27 @@ def save_PDI_frames(path_output_dir, PDI_frames, object_name, mask_beams,
 
             if HWP_used:
                 # Rotate the image
-                im_to_save = rotate_cube(im_to_save, pos_angle, pad=True,
-                                         rotate_axes=(-2,-1))
-
+                im_to_save = list(im_to_save)
+                for i in range(len(im_to_save)):
+                    im_to_save[i] = rotate_cube(im_to_save[i][None,:],
+                                                pos_angle, pad=True,
+                                                rotate_axes=(-2,-1))[0]
+                im_to_save = np.array(im_to_save)
             write_FITS_file(Path(path_PDI, f'{key}.fits'),
                             im_to_save, header=hdu.header)
 
         del im_to_save
+
+def load_PDI_frames(PDI_frames, key):
+
+    if isinstance(PDI_frames[key], Path):
+        # File was saved, key-value was replaced with path
+        # Load and return data
+        return fits.getdata(PDI_frames[key]).astype(np.float32)
+
+    else:
+        # If array or None, return key-value
+        return PDI_frames[key]
 
 def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         r_crosstalk, HWP_used, Wollaston_used, object_name, disk_pos_angle,
@@ -3838,6 +3869,11 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     saturated_counts : float
         Upper limit of pixel's linear response regime.
     '''
+
+    # Make the directory for the PDI images
+    path_PDI = Path(path_output_dir_selected, 'PDI')
+    if not path_PDI.is_dir():
+        path_PDI.mkdir()
 
     global path_beams_files_selected
     path_beams_files_selected = sorted(
@@ -3921,7 +3957,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     # Double-difference
     PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
                                    crosstalk_correction, r, r_crosstalk,
-                                   Wollaston_used)
+                                   Wollaston_used, path_PDI)
     del ind_I, ind_QU
 
     if (PDI_frames['cube_Q'] is not None) and \
@@ -3932,9 +3968,11 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         PDI_frames['median_Q_IPS'], \
         PDI_frames['median_U_IPS'] \
         = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-              Q=PDI_frames['cube_Q'], U=PDI_frames['cube_U'],
-              I_Q=PDI_frames['cube_I_Q'], I_U=PDI_frames['cube_I_U'],
-              I=PDI_frames['cube_I'])
+              Q=load_PDI_frames(PDI_frames, 'cube_Q'),
+              U=load_PDI_frames(PDI_frames, 'cube_U'),
+              I_Q=load_PDI_frames(PDI_frames, 'cube_I_Q'),
+              I_U=load_PDI_frames(PDI_frames, 'cube_I_U'),
+              I=load_PDI_frames(PDI_frames, 'cube_I'))
 
         # Retrieve the de-projected radius
         yp, xp = np.mgrid[0:mask_beams.shape[0], 0:mask_beams.shape[1]]
@@ -3968,7 +4006,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     del r, phi, spm
 
     # Save the data products
-    save_PDI_frames(path_output_dir_selected, PDI_frames, object_name,
+    save_PDI_frames(path_PDI, PDI_frames, object_name,
                     mask_beams, HWP_used, pos_angles[0])
 
 def run_pipeline(path_SCIENCE_dir,
