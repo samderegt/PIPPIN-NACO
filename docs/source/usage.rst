@@ -161,8 +161,8 @@ Final polarised light products:
 - :file:`U_phi.fits`: Azimuthal Stokes :math:`U_\phi = + Q_\mathrm{IPS} \sin 2\phi - U_\mathrm{IPS} \cos 2\phi` parameter.
 
 
-Different instrument configurations
------------------------------------
+Instrument configurations
+-------------------------
 #   HWP usage, wiregrid/Wollaston
 #   Extended data products
 #   IP removal
