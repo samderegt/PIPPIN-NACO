@@ -2,6 +2,56 @@
 Configuration file
 ==================
 
+The default configuration file is given below:
+
+::
+
+   [Pre-processing options]
+
+   run_pre_processing     = True
+   remove_data_products   = True
+   split_observing_blocks = True
+   y_pixel_range          = [0,1024]
+
+
+   [Sky-subtraction]
+
+   sky_subtraction_method     = dithering-offset
+   sky_subtraction_min_offset = 100
+   remove_horizontal_stripes  = True
+
+   [Centering]
+
+   centering_method = single-Moffat
+   tied_offset      = False
+
+
+   [PDI options]
+
+   size_to_crop         = [120,120]
+   r_inner_IPS          = [0,3,6,9,12]
+   r_outer_IPS          = [3,6,9,12,15]
+   crosstalk_correction = True
+   minimise_U_phi       = True
+   r_crosstalk          = [7,17]
+
+
+   [Object information]
+
+   object_name      =
+   disk_pos_angle   = 0.0
+   disk_inclination = 0.0
+
+The input parameters are divided into five groups:
+
+- :ref:`Pre-processing options`
+- :ref:`Sky-subtraction`
+- :ref:`Centering`
+- :ref:`PDI options`
+- :ref:`Object information`
+
+Each parameter in the configuration file is explained below.
+
 Pre-processing options
 ----------------------
 
