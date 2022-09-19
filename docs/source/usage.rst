@@ -112,6 +112,7 @@ PDI data products
 Depending on the observations, the :file:`PDI/` directory can contain any of the following files:
 
 Total intensities:
+
 - :file:`cube_I.fits`: Total intensity per HWP-cycle.
 - :file:`cube_I_Q+.fits`: Total intensity per :math:`Q^+` frame.
 - :file:`cube_I_Q-.fits`: Total intensity per :math:`Q^-` frame.
@@ -121,6 +122,7 @@ Total intensities:
 - :file:`cube_I_U.fits`: Total intensity per combination of :math:`U^+` and :math:`U^-` frames.
 
 Median-combined total intensities:
+
 - :file:`median_I.fits`: Median-combined over all HWP-cycles.
 - :file:`median_I_Q+.fits`: Median-combined over all :math:`I_{Q^+}` frames.
 - :file:`median_I_Q-.fits`: Median-combined over all :math:`I_{Q^-}` frames.
@@ -130,24 +132,28 @@ Median-combined total intensities:
 - :file:`median_I_U.fits`: Median-combined over all :math:`I_{U}` frames.
 
 Stokes parameters:
+
 - :file:`cube_Q+.fits`: Stokes :math:`Q^+` parameter per frame.
 - :file:`cube_Q-.fits`: Stokes :math:`Q^-` parameter per frame.
-- :file:`cube_Q.fits`: : Stokes :math:`Q` parameter per combination of :math:`Q^+` and :math:`Q^-` frames.
+- :file:`cube_Q.fits`: : Stokes :math:`Q = \frac{1}{2}(Q^+ + Q^-)` parameter per combination of :math:`Q^+` and :math:`Q^-` frames.
 - :file:`cube_U+.fits`: Stokes :math:`U^+` parameter per frame.
 - :file:`cube_U-.fits`: Stokes :math:`U^-` parameter per frame.
-- :file:`cube_U.fits`: : Stokes :math:`U` parameter per combination of :math:`U^+` and :math:`U^-` frames.
+- :file:`cube_U.fits`: : Stokes :math:`U = \frac{1}{2}(U^+ + U^-)` parameter per combination of :math:`U^+` and :math:`U^-` frames.
 
 Median-combined Stokes parameters:
+
 - :file:`median_Q+.fits`: Median-combined over all :math:`Q^+` observations.
 - :file:`median_Q-.fits`: Median-combined over all :math:`Q^-` observations.
 - :file:`median_Q.fits`: Median-combined over all :math:`Q` observations.
-- :file:`median_Q_IPS.fits`: Median-combined + IP-corrected Stokes :math:`Q` parameter.
+- :file:`median_Q_IPS.fits`: Median-combined + IP-corrected Stokes :math:`Q_\mathrm{IPS}` parameter.
 - :file:`median_U+.fits`: Median-combined over all :math:`U^+` observations.
 - :file:`median_U-.fits`: Median-combined over all :math:`U^-` observations.
 - :file:`median_U.fits`: Median-combined over all :math:`U` observations.
-- :file:`median_U_IPS.fits`: Median-combined + IP-corrected Stokes :math:`U` parameter.
+- :file:`median_U_IPS.fits`: Median-combined + IP-corrected Stokes :math:`U_\mathrm{IPS}` parameter.
 
-- :file:`P_I.fits`
+Final polarised light products:
+
+- :file:`P_I.fits`: Polarised intensity :math:`PI = \sqrt{Q_{\rm IPS}^2 + U_\text{IPS}^2}`
 - :file:`P_I_r2.fits`
 - :file:`Q_phi.fits`
 - :file:`Q_phi_r2.fits`
