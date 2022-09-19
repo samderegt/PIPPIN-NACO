@@ -100,6 +100,9 @@ Per observation, the intensity and Stokes parameter are obtained by summing and 
 
 If ``crosstalk_correction = True`` (:ref:`config-file <Configuration file>`), PIPPIN evaluates and correct for the reduced efficiency of the Stokes :math:`U` parameter which originates from crosstalk between the components of the Stokes vector. Following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an annulus is used to minimise the number of pixels where a higher signal in :math:`Q` compared to :math:`U`. The ``r_crosstalk`` parameter in the :ref:`config-file <Configuration file>` gives the inner and outer radii of this annulus.
 
+.. attention::
+   The crosstalk correction is made to function with non-symmetric disks as it employs a counting method of pixels with higher :math:`Q`- than :math:`U`-signal (`Avenhaus et al. 2014 <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_). This method is not expected to work well with high-inclination disks due to the un-equal distribution of (any) signal-producing pixels over the :math:`Q`- and :math:`U`-quadrants.
+
 Using the annuli described with the ``r_inner_IPS`` and ``r_outer_IPS`` parameters, PIPPIN corrects for the polarisation that is measured near the image centre. Any polarised signal found near the stellar signal is believed to originate from IP, because the stellar signal is assumed to be un-polarised. This correction is performed for each HWP-cycle, thus avoiding temporal differences in the instrument configuration and IP.
 
 Finally, the :math:`U_\phi`-signal in the ``r_crosstalk`` annulus is minimised if requested (``minimise_U_phi = True``; :ref:`config-file <Configuration file>`). As described by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an offset-angle can be estimated for the azimuthal Stokes parameters :math:`Q_\phi` and :math:`U_\phi`.
