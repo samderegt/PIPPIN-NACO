@@ -88,7 +88,7 @@ The PDI part of PIPPIN begins by removing any incomplete HWP cycles and open AO-
 
 Instrumental polarisation
 ^^^^^^^^^^^^^^^^^^^^^^^^^
-A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be unpolarised and the annuli provided in the :ref:`config-file <Configuration file>` (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
+A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be un-polarised and the annuli provided in the :ref:`config-file <Configuration file>` (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
 
 .. note::
    If the rotator was used to record different Stokes parameters, the beams are de-rotated when read into memory.
@@ -135,10 +135,10 @@ Stokes parameters:
 
 - :file:`cube_Q+.fits`: Stokes :math:`Q^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
 - :file:`cube_Q-.fits`: Stokes :math:`Q^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_Q.fits`: Stokes :math:`Q = \frac{1}{2}(Q^+ + Q^-)` parameter per combination of :math:`Q^\pm` frames.
+- :file:`cube_Q.fits`: Stokes :math:`Q = \frac{1}{2}(Q^+ - Q^-)` parameter per combination of :math:`Q^\pm` frames.
 - :file:`cube_U+.fits`: Stokes :math:`U^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
 - :file:`cube_U-.fits`: Stokes :math:`U^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_U.fits`: Stokes :math:`U = \frac{1}{2}(U^+ + U^-)` parameter per combination of :math:`U^\pm` frames.
+- :file:`cube_U.fits`: Stokes :math:`U = \frac{1}{2}(U^+ - U^-)` parameter per combination of :math:`U^\pm` frames.
 
 Median-combined Stokes parameters:
 
