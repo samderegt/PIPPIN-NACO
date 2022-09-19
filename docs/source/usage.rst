@@ -96,7 +96,7 @@ A number of instrumental polarisation (IP) corrections are performed. The ordina
 Per observation, the intensity and Stokes parameter are obtained by summing and subtracting the (extra)-ordinary beams, respectively. Next, the double-difference method is applied with the redundant observations (i.e. :math:`Q^+`/:math:`Q^-` and :math:`U^+`/:math:`U^-`).
 
 .. note::
-   If the double-difference method cannot be applied (e.g. due to observations of :math:`Q^+` without :math:`Q^-`), PIPPIN simply uses the available observations as the IP-corrected observation (e.g. :math:`Q=Q^+` instead of :math:`Q=(Q^+-Q^-)/2`)
+   If the double-difference method cannot be applied (e.g. due to observations of :math:`Q^+` without :math:`Q^-`), PIPPIN simply uses the available observations as the IP-corrected observation (e.g. :math:`Q=Q^+` instead of :math:`Q=\frac{1}{2}(Q^+-Q^-)`)
 
 If ``crosstalk_correction = True`` (:ref:`config-file <Configuration file>`), PIPPIN evaluates and correct for the reduced efficiency of the Stokes :math:`U` parameter which originates from crosstalk between the components of the Stokes vector. Following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_, an annulus is used to minimise the number of pixels where a higher signal in :math:`Q` compared to :math:`U`. The ``r_crosstalk`` parameter in the :ref:`config-file <Configuration file>` gives the inner and outer radii of this annulus.
 
@@ -114,12 +114,12 @@ Depending on the observations, the :file:`PDI/` directory can contain any of the
 Total intensities:
 
 - :file:`cube_I.fits`: Total intensity per HWP-cycle.
-- :file:`cube_I_Q+.fits`: Total intensity per :math:`Q^+` frame.
-- :file:`cube_I_Q-.fits`: Total intensity per :math:`Q^-` frame.
-- :file:`cube_I_Q.fits`: Total intensity per combination of :math:`Q^+` and :math:`Q^-` frames.
-- :file:`cube_I_U+.fits`: Total intensity per :math:`U^+` frame.
-- :file:`cube_I_U-.fits`: Total intensity per :math:`U^-` frame.
-- :file:`cube_I_U.fits`: Total intensity per combination of :math:`U^+` and :math:`U^-` frames.
+- :file:`cube_I_Q+.fits`: Total intensity :math:`I_{Q^+} = I_\mathrm{ord} + I_\mathrm{ext}` per :math:`Q^+` frame.
+- :file:`cube_I_Q-.fits`: Total intensity :math:`I_{Q^-} = I_\mathrm{ord} + I_\mathrm{ext}` per :math:`Q^-` frame.
+- :file:`cube_I_Q.fits`: Total intensity :math:`I_Q = \frac{1}{2}(I_{Q^+} + I_{Q^-})` per combination of :math:`Q^\pm` frames.
+- :file:`cube_I_U+.fits`: Total intensity :math:`I_{U^+} = I_\mathrm{ord} + I_\mathrm{ext}` per :math:`U^+` frame.
+- :file:`cube_I_U-.fits`: Total intensity :math:`I_{U^-} = I_\mathrm{ord} + I_\mathrm{ext}` per :math:`U^-` frame.
+- :file:`cube_I_U.fits`: Total intensity :math:`I_U = \frac{1}{2}(I_{U^+} + I_{U^-})` per combination of :math:`U^\pm` frames.
 
 Median-combined total intensities:
 
@@ -133,12 +133,12 @@ Median-combined total intensities:
 
 Stokes parameters:
 
-- :file:`cube_Q+.fits`: Stokes :math:`Q^+` parameter per frame.
-- :file:`cube_Q-.fits`: Stokes :math:`Q^-` parameter per frame.
-- :file:`cube_Q.fits`: : Stokes :math:`Q = \frac{1}{2}(Q^+ + Q^-)` parameter per combination of :math:`Q^+` and :math:`Q^-` frames.
-- :file:`cube_U+.fits`: Stokes :math:`U^+` parameter per frame.
-- :file:`cube_U-.fits`: Stokes :math:`U^-` parameter per frame.
-- :file:`cube_U.fits`: : Stokes :math:`U = \frac{1}{2}(U^+ + U^-)` parameter per combination of :math:`U^+` and :math:`U^-` frames.
+- :file:`cube_Q+.fits`: Stokes :math:`Q^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
+- :file:`cube_Q-.fits`: Stokes :math:`Q^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
+- :file:`cube_Q.fits`: Stokes :math:`Q = \frac{1}{2}(Q^+ + Q^-)` parameter per combination of :math:`Q^\pm` frames.
+- :file:`cube_U+.fits`: Stokes :math:`U^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
+- :file:`cube_U-.fits`: Stokes :math:`U^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
+- :file:`cube_U.fits`: Stokes :math:`U = \frac{1}{2}(U^+ + U^-)` parameter per combination of :math:`U^\pm` frames.
 
 Median-combined Stokes parameters:
 
@@ -153,12 +153,12 @@ Median-combined Stokes parameters:
 
 Final polarised light products:
 
-- :file:`P_I.fits`: Polarised intensity :math:`PI = \sqrt{Q_{\rm IPS}^2 + U_\text{IPS}^2}`
-- :file:`P_I_r2.fits`
-- :file:`Q_phi.fits`
-- :file:`Q_phi_r2.fits`
-- :file:`r.fits`
-- :file:`U_phi.fits`
+- :file:`P_I.fits`: Polarised intensity :math:`PI = \sqrt{Q_\mathrm{IPS}^2 + U_\text{IPS}^2}`.
+- :file:`P_I_r2.fits`: Polarised intensity :math:`PI` scaled by the de-projected squared separation :math:`r^2`.
+- :file:`Q_phi.fits`: Azimuthal Stokes :math:`Q_\phi = - Q_\mathrm{IPS} \cos 2\phi - U_\mathrm{IPS} \sin 2\phi` parameter.
+- :file:`Q_phi_r2.fits`: Azimuthal :math:`Q_\phi` parameter scaled by the de-projected squared separation :math:`r^2`.
+- :file:`r.fits`: De-projected separation :math:`r`.
+- :file:`U_phi.fits`: Azimuthal Stokes :math:`U_\phi = + Q_\mathrm{IPS} \sin 2\phi - U_\mathrm{IPS} \cos 2\phi` parameter.
 
 
 Different instrument configurations
