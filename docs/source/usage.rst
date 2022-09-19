@@ -91,7 +91,7 @@ Instrumental polarisation
 A number of instrumental polarisation (IP) corrections are performed. The ordinary and extra-ordinary beams are read into memory and their fluxes are equalised (per observation) using the method outlined by `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_ in the appendix. The stellar flux is assumed to be unpolarised and the annuli provided in the :ref:`config-file <Configuration file>` (``r_inner_IPS``, ``r_outer_IPS``) are employed to assess the stellar flux outside of the saturated core of the PSF.
 
 .. note::
-   If the rotator was used to record different Stokes parameters, the beams are de-rotated when read.
+   If the rotator was used to record different Stokes parameters, the beams are de-rotated when read into memory.
 
 Per observation, the intensity and Stokes parameter are obtained by summing and subtracting the (extra)-ordinary beams, respectively. Next, the double-difference method is applied with the redundant observations (i.e. :math:`Q^+`/:math:`Q^-` and :math:`U^+`/:math:`U^-`).
 
@@ -109,36 +109,44 @@ Finally, the :math:`U_\phi`-signal in the ``r_crosstalk`` annulus is minimised i
 
 PDI data products
 ^^^^^^^^^^^^^^^^^
-The :file:`PDI/` directory
+Depending on the observations, the :file:`PDI/` directory can contain any of the following files:
 
-- :file:`cube_I.fits`
-- :file:`cube_I_Q+.fits`
-- :file:`cube_I_Q-.fits`
-- :file:`cube_I_Q.fits`
-- :file:`cube_I_U+.fits`
-- :file:`cube_I_U-.fits`
-- :file:`cube_I_U.fits`
-- :file:`cube_Q+.fits`
-- :file:`cube_Q-.fits`
-- :file:`cube_Q.fits`
-- :file:`cube_U+.fits`
-- :file:`cube_U-.fits`
-- :file:`cube_U.fits`
-- :file:`median_I.fits`
-- :file:`median_I_Q+.fits`
-- :file:`median_I_Q-.fits`
-- :file:`median_I_Q.fits`
-- :file:`median_I_U+.fits`
-- :file:`median_I_U-.fits`
-- :file:`median_I_U.fits`
-- :file:`median_Q+.fits`
-- :file:`median_Q-.fits`
-- :file:`median_Q.fits`
-- :file:`median_Q_IPS.fits`
-- :file:`median_U+.fits`
-- :file:`median_U-.fits`
-- :file:`median_U.fits`
-- :file:`median_U_IPS.fits`
+Total intensities:
+- :file:`cube_I.fits`: Total intensity per HWP-cycle.
+- :file:`cube_I_Q+.fits`: Total intensity per :math:`Q^+` frame.
+- :file:`cube_I_Q-.fits`: Total intensity per :math:`Q^-` frame.
+- :file:`cube_I_Q.fits`: Total intensity per combination of :math:`Q^+` and :math:`Q^-` frames.
+- :file:`cube_I_U+.fits`: Total intensity per :math:`U^+` frame.
+- :file:`cube_I_U-.fits`: Total intensity per :math:`U^-` frame.
+- :file:`cube_I_U.fits`: Total intensity per combination of :math:`U^+` and :math:`U^-` frames.
+
+Median-combined total intensities:
+- :file:`median_I.fits`: Median-combined over all HWP-cycles.
+- :file:`median_I_Q+.fits`: Median-combined over all :math:`I_{Q^+}` frames.
+- :file:`median_I_Q-.fits`: Median-combined over all :math:`I_{Q^-}` frames.
+- :file:`median_I_Q.fits`: Median-combined over all :math:`I_{Q}` frames.
+- :file:`median_I_U+.fits`: Median-combined over all :math:`I_{U^+}` frames.
+- :file:`median_I_U-.fits`: Median-combined over all :math:`I_{U^-}` frames.
+- :file:`median_I_U.fits`: Median-combined over all :math:`I_{U}` frames.
+
+Stokes parameters:
+- :file:`cube_Q+.fits`: Stokes :math:`Q^+` parameter per frame.
+- :file:`cube_Q-.fits`: Stokes :math:`Q^-` parameter per frame.
+- :file:`cube_Q.fits`: : Stokes :math:`Q` parameter per combination of :math:`Q^+` and :math:`Q^-` frames.
+- :file:`cube_U+.fits`: Stokes :math:`U^+` parameter per frame.
+- :file:`cube_U-.fits`: Stokes :math:`U^-` parameter per frame.
+- :file:`cube_U.fits`: : Stokes :math:`U` parameter per combination of :math:`U^+` and :math:`U^-` frames.
+
+Median-combined Stokes parameters:
+- :file:`median_Q+.fits`: Median-combined over all :math:`Q^+` observations.
+- :file:`median_Q-.fits`: Median-combined over all :math:`Q^-` observations.
+- :file:`median_Q.fits`: Median-combined over all :math:`Q` observations.
+- :file:`median_Q_IPS.fits`: Median-combined + IP-corrected Stokes :math:`Q` parameter.
+- :file:`median_U+.fits`: Median-combined over all :math:`U^+` observations.
+- :file:`median_U-.fits`: Median-combined over all :math:`U^-` observations.
+- :file:`median_U.fits`: Median-combined over all :math:`U` observations.
+- :file:`median_U_IPS.fits`: Median-combined + IP-corrected Stokes :math:`U` parameter.
+
 - :file:`P_I.fits`
 - :file:`P_I_r2.fits`
 - :file:`Q_phi.fits`

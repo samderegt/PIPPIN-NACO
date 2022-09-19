@@ -3774,8 +3774,8 @@ def save_PDI_frames(path_PDI, PDI_frames, object_name, mask_beams,
     keys_to_save = np.array(keys_to_save)[np.argsort(array_size)]
 
     # Create a header
-    mask_beams_rotated = rotate_cube(mask_beams, pos_angle, pad=False,
-                                     rotate_axes=(0,1))
+    mask_beams_rotated = rotate_cube(mask_beams, pos_angle,
+                                     pad=True, rotate_axes=(0,1))
     hdu = write_header(object_name, mask_beams_rotated)
     del mask_beams_rotated
 
