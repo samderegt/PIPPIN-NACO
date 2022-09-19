@@ -2727,16 +2727,34 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
     '''
 
     if pad:
-        pad_width = ((0, 0),
-                     ((cube.shape[rotate_axes[1]] -
-                       cube.shape[rotate_axes[0]]) // 2,
-                      (cube.shape[rotate_axes[1]] -
-                       cube.shape[rotate_axes[0]]) // 2),
-                     (0, 0)
-                    )
+        if cube.ndim == 2:
+            pad_width = (
+                         ((cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2,
+                          (cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2),
+                         (0, 0)
+                         )
+        elif cube.ndim == 3:
+            pad_width = ((0, 0),
+                         ((cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2,
+                          (cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2),
+                         (0, 0)
+                        )
+        elif cube.ndim == 4:
+            pad_width = ((0, 0),
+                         (0, 0),
+                         ((cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2,
+                          (cube.shape[rotate_axes[1]] -
+                           cube.shape[rotate_axes[0]]) // 2),
+                         (0, 0)
+                        )
         cube = np.pad(cube, pad_width, constant_values=0.0)
 
-        mask = np.ma.mask_or(np.isnan(cube), (cube==0.0))
+        mask = np.ma.mask_or(np.isnan(cube), (cube==0.0), shrink=False)
         cube[mask] = 0
 
         # Rotate a cube
@@ -2775,8 +2793,11 @@ def rotate_cube(cube, pos_angle, pad=False, rotate_axes=(1,2)):
         y_min = np.min(np.array([y1_new,y2_new]), axis=0)
         y_max = np.max(np.array([y1_new,y2_new]), axis=0)
 
-        # Set pixels outside the polarimetric mask to NaN
-        rotated_cube[:,~((yp >= y_min) & (yp <= y_max))] = np.nan
+        if cube.ndim == 2:
+            # Set pixels outside the polarimetric mask to NaN
+            rotated_cube[~((yp >= y_min) & (yp <= y_max))] = np.nan
+        elif cube.ndim == 3:
+            rotated_cube[:,~((yp >= y_min) & (yp <= y_max))] = np.nan
 
     else:
 
@@ -3775,7 +3796,7 @@ def save_PDI_frames(path_PDI, PDI_frames, object_name, mask_beams,
 
     # Create a header
     mask_beams_rotated = rotate_cube(mask_beams, pos_angle,
-                                     pad=True, rotate_axes=(0,1))
+                                     pad=False, rotate_axes=(0,1))
     hdu = write_header(object_name, mask_beams_rotated)
     del mask_beams_rotated
 
@@ -3817,7 +3838,7 @@ def save_PDI_frames(path_PDI, PDI_frames, object_name, mask_beams,
                 im_to_save = list(im_to_save)
                 for i in range(len(im_to_save)):
                     im_to_save[i] = rotate_cube(im_to_save[i][None,:],
-                                                pos_angle, pad=True,
+                                                pos_angle, pad=False,
                                                 rotate_axes=(-2,-1))[0]
                 im_to_save = np.array(im_to_save)
             write_FITS_file(Path(path_PDI, f'{key}.fits'),

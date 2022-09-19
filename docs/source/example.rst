@@ -18,16 +18,19 @@ As the pipeline is running, information is printed in the terminal and stored in
 
 The parameters in the configuration-file are read and the SCIENCE observations are grouped by observation type (only one in this example). After DARK-subtraction and FLAT-normalisation, figures are generated in the :file:`example_HD_135344B/pipeline_output/200236070_0.3454_Ks/plots/` directory. These figures are updated once the sky-subtraction is performed and the ordinary and extra-ordinary beams are cropped out. The sky-subtraction is carried out by subtracting an observation with a different dithering-position.
 
-The PDI technique is applied to the cropped-out beams and a series of corrections are performed to mitigate the effects of instrumental polarisation. The final data products are stored in the :file:`example_HD_135344B/pipeline_output/200236070_0.3454_Ks/PDI/` directory. Running the following command within a terminal in the :file:`example_HD_135344B/pipeline_output/200236070_0.3454_Ks/PDI/` directory will show the :math:`Q_\phi`- and :math:`U_\phi`-images in `DS9 <http://ds9.si.edu/>`_.
+The PDI technique is applied to the cropped-out beams and a series of corrections are performed to mitigate the effects of instrumental polarisation. The final data products are stored in the :file:`example_HD_135344B/pipeline_output/200236070_0.3454_Ks/PDI/` directory. Running the following command within a terminal in the :file:`example_HD_135344B/pipeline_output/200236070_0.3454_Ks/PDI/` directory will show the :math:`Q_\phi` and :math:`U_\phi` images in `DS9 <http://ds9.si.edu/>`_.
 
 ::
 
-   ds9 -tile Q_phi.fits -cube 2 -scale limits -20 50 U_phi.fits -cube 2 -scale limits -7 7 -lock frame wcs -lock colorbar yes -cmap cool
+   ds9 -tile Q_phi.fits -cube 2 -scale limits -10 40 U_phi.fits -cube 2 -scale limits -5 20 -lock frame wcs -lock colorbar yes -cmap cool
 
 
-.. figure:: ../figures/figure_example_Q_phi_U_phi.png
+.. figure:: ../figures/figure_example.png
    :width: 750px
 
-The images above show the result of only 2 HWP cycles and thus have a lower signal-to-noise than the combination of all 16 cycles.
+The left figure shows the :math:`Q_\phi` image and the right figure displays the :math:`U_\phi` signal. The images above show the result of only 2 HWP cycles and thus have a lower signal-to-noise than the combination of all 16 cycles.
+
+.. hint::
+   The parameters in the :ref:`configuration file <Configuration file>` (:file:`config.conf`) can be tweaked to generate different data products. For example, setting `crosstalk_correction = True` and `minimise_U_phi = True` allows PIPPIN to apply a correction for the :ref:`instrumental crosstalk <Instrumental polarisation>` between the linear and circular Stokes parameters. After running `pippin --run_example` again, the :math:`U_\phi` image shows a reduced signal.
 
 In the :ref:`next section <Usage instructions>` we will learn how to reduce other NACO polarimetric datasets.

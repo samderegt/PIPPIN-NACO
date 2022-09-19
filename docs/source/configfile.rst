@@ -161,7 +161,7 @@ PDI options
    If ``True``, PIPPIN corrects for the :ref:`instrumental crosstalk <Instrumental polarisation>` between the linear and circular Stokes parameters following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_. The reduced efficiency of the Stokes :math:`U` parameter is assessed in the annulus provided by r_crosstalk_.
 
 .. attention::
-   The crosstalk correction is made to function with non-symmetric disks as it employs a counting method of pixels with higher :math:`Q`- than :math:`U`-signal (`Avenhaus et al. 2014 <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_). This method is not expected to work well with high-inclination disks due to the un-equal distribution of (any) signal-producing pixels over the :math:`Q`- and :math:`U`-quadrants.
+   The crosstalk correction is made to function with non-symmetric disks as it employs a counting method of pixels with higher :math:`Q`- than :math:`U`-signal (`Avenhaus et al. 2014 <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_). However, this method is not expected to work well with high-inclination disks due to the un-equal distribution of (any) signal-producing pixels over the :math:`Q`- and :math:`U`-quadrants.
 
 
 .. _minimise_U_phi:
@@ -195,15 +195,14 @@ Object information
 
    `str` (default = ``file_path``)
 
-   Object name to query the SIMBAD archive for target coordinates. These coordinates are subsequently used to set up a world-coordinate system. If this parameter is not provided, PIPPIN will attempt to infer the object name from the directory in which it is run. If the `object_name` is not recognised by SIMBAD, the pipeline will exit with an error. 
+   Object name to query the SIMBAD archive for target coordinates. These coordinates are subsequently used to set up a world-coordinate system. If this parameter is not provided, PIPPIN will attempt to infer the object name from the directory in which it is run. If the `object_name` is not recognised by SIMBAD, the pipeline will exit with an error.
 
 
 .. py:function:: disk_pos_angle:
 
    `float` (default = 0.0)
 
-   Disk position angle in degrees. This parameter is used to determine the de-projected radius.
-
+   Disk position angle in degrees. This parameter is used to determine the de-projected radius.However, t
 
 .. py:function:: disk_inclination:
 
