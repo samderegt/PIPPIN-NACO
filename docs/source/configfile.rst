@@ -142,7 +142,7 @@ PDI options
 
    `list` or `integer` (default = ``[0,3,6,9,12]``)
 
-   Inner radii of the annuli that PIPPIN uses to equalise the flux in the ordinary and extra-ordinary beams following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_. These annuli are also used to perform the IP-subtraction under the assumption that the stellar light in the annulus is unpolarised (see:ref:`Instrumental polarisation <Instrumental polarisation>`).
+   Inner radii of the annuli that PIPPIN uses to equalise the flux in the ordinary and extra-ordinary beams following `Avenhaus et al. (2014) <https://ui.adsabs.harvard.edu/abs/2014ApJ...781...87A/abstract>`_. These annuli are also used to perform the IP-subtraction under the assumption that the stellar light in the annulus is unpolarised (see :ref:`Instrumental polarisation <Instrumental polarisation>`).
 
 
 .. py:function:: r_outer_IPS:

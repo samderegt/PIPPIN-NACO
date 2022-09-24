@@ -508,7 +508,7 @@ def write_config_file(path_config_file):
     config_file.write('{}\n\n{}\n{}\n\n\n'.format(*centering_options))
 
     PDI_options = ['[PDI options]',
-                   'size_to_crop         = [120,120]',
+                   'size_to_crop         = [121,121]',
                    'r_inner_IPS          = [0,3,6,9,12]',
                    'r_outer_IPS          = [3,6,9,12,15]',
                    'crosstalk_correction = False',
@@ -609,8 +609,16 @@ def read_config_file(path_config_file):
         tied_offset = False
 
 
-    size_to_crop         = literal_eval(config.get('PDI options',
-                                                   'size_to_crop'))
+    size_to_crop = literal_eval(config.get('PDI options', 'size_to_crop'))
+    # Change the size to crop to odd lengths
+    size_to_crop_is_even = (np.mod(size_to_crop, 2) == 0)
+    old_size_to_crop     = np.copy(size_to_crop)
+    size_to_crop = np.array(size_to_crop) + 1*size_to_crop_is_even
+    size_to_crop = list(size_to_crop)
+
+    if size_to_crop_is_even.any():
+        print_and_log(f'\nsize_to_crop = {old_size_to_crop} had axes of even lengths, automatically changed to {size_to_crop}\n')
+
     r_inner_IPS          = literal_eval(config.get('PDI options',
                                                    'r_inner_IPS'))
     r_outer_IPS          = literal_eval(config.get('PDI options',
@@ -1352,6 +1360,18 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
         ord_beam_i, ext_beam_i = [], []
         for j, im in enumerate(cube):
 
+            """
+            fig, ax = plt.subplots(figsize=(25,10), ncols=3)
+            ax[0].imshow(im)
+            ax[0].scatter(beam_centers[i][j,0,0], beam_centers[i][j,0,1])
+
+            ax[0].set(xlim=(beam_centers[i][j,0,0] - size_to_crop[1]/2,
+                            beam_centers[i][j,0,0] + size_to_crop[1]/2),
+                      ylim=(beam_centers[i][j,0,1] - size_to_crop[0]/2,
+                            beam_centers[i][j,0,1] + size_to_crop[0]/2)
+                      )
+            """
+
             # Padding the image for large cropping sizes
             pad_width = ((0, 0), (im.shape[1], im.shape[1]))
             im = np.pad(im, pad_width, constant_values=0.0)
@@ -1360,9 +1380,10 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
             im_mask = (im == 0)
 
             # Shift the ordinary beam to the center of the image
-            y_shift = im.shape[0]/2 - (beam_centers[i][j,0,1] - yp.min()) - 1/2
+            y_shift = im.shape[0]/2 - (beam_centers[i][j,0,1] - yp.min())
             x_shift = im.shape[1]/2 - (beam_centers[i][j,0,0] + pad_width[1][0]
-                                       - xp.min()) - 1/2
+                                       - xp.min())
+
             ord_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
             # Replace values outside of image with 0
             ord_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
@@ -1370,25 +1391,40 @@ def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
             ord_beam_ij[ord_beam_ij_mask] = 0
 
             # Shift the extra-ordinary beam to the center of the image
-            y_shift = im.shape[0]/2 - (beam_centers[i][j,1,1] - yp.min()) - 1/2
+            y_shift = im.shape[0]/2 - (beam_centers[i][j,1,1] - yp.min())
             x_shift = im.shape[1]/2 - (beam_centers[i][j,1,0] + pad_width[1][0]
-                                       - xp.min()) - 1/2
+                                       - xp.min())
             ext_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
             # Replace values outside of image with 0
             ext_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
                                              order=0, cval=0.0)
             ext_beam_ij[ext_beam_ij_mask] = 0
 
+            """
+            ax[1].imshow(ord_beam_ij)
+            ax[1].scatter(ord_beam_ij.shape[1]/2, ord_beam_ij.shape[0]/2)
+            ax[1].set(xlim=(ord_beam_ij.shape[1]/2 - size_to_crop[1]/2,
+                            ord_beam_ij.shape[1]/2 + size_to_crop[1]/2),
+                      ylim=(ord_beam_ij.shape[0]/2 - size_to_crop[0]/2,
+                            ord_beam_ij.shape[0]/2 + size_to_crop[0]/2))
+            """
+
             # Indices to crop between
-            y_idx_low  = (ord_beam_ij.shape[0] - size_to_crop[0])//2
-            y_idx_high = (ord_beam_ij.shape[0] + size_to_crop[0])//2
-            x_idx_low  = (ord_beam_ij.shape[1] - size_to_crop[1])//2
-            x_idx_high = (ord_beam_ij.shape[1] + size_to_crop[1])//2
+            y_idx_low  = int(ord_beam_ij.shape[0]/2 - size_to_crop[0]/2 + 1/2)
+            y_idx_high = int(ord_beam_ij.shape[0]/2 + size_to_crop[0]/2 + 1/2)
+            x_idx_low  = int(ord_beam_ij.shape[1]/2 - size_to_crop[1]/2 + 1/2)
+            x_idx_high = int(ord_beam_ij.shape[1]/2 + size_to_crop[1]/2 + 1/2)
+
             # Crop the images
             ord_beam_ij = ord_beam_ij[y_idx_low:y_idx_high,
                                       x_idx_low:x_idx_high]
             ext_beam_ij = ext_beam_ij[y_idx_low:y_idx_high,
                                       x_idx_low:x_idx_high]
+
+            """
+            ax[2].imshow(ord_beam_ij[::-1,:])
+            plt.show()
+            """
 
             ord_beam_i.append(ord_beam_ij)
             ext_beam_i.append(ext_beam_ij)
@@ -3638,9 +3674,8 @@ def write_header_coordinates(file, header, object_name, mask_beams):
 
     # Reference pixel, first pixel has index 1
     im_shape = mask_beams.shape
-
-    header['CRPIX1'] = im_shape[1]/2
-    header['CRPIX2'] = im_shape[0]/2
+    header['CRPIX1'] = im_shape[1]/2 + 1/2
+    header['CRPIX2'] = im_shape[0]/2 + 1/2
 
     # Fill in RA, DEC
     header['RA']  = coord_fk5.ra.degree[0]

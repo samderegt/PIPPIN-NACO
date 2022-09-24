@@ -31,6 +31,6 @@ The PDI technique is applied to the cropped-out beams and a series of correction
 The left figure shows the :math:`Q_\phi` image and the right figure displays the :math:`U_\phi` signal. The images above show the result of only 2 HWP cycles and thus have a lower signal-to-noise than the combination of all 16 cycles.
 
 .. hint::
-   The parameters in the :ref:`configuration file <Configuration file>` (:file:`config.conf`) can be tweaked to generate different data products. For example, setting `crosstalk_correction = True` and `minimise_U_phi = True` allows PIPPIN to apply a correction for the :ref:`instrumental crosstalk <Instrumental polarisation>` between the linear and circular Stokes parameters. After running `pippin --run_example` again, the :math:`U_\phi` image shows a reduced signal.
+   The parameters in the :ref:`configuration file <Configuration file>` (:file:`config.conf`) can be tweaked to generate different data products. For example, setting ``crosstalk_correction = True`` and ``minimise_U_phi = True`` allows PIPPIN to apply a correction for the :ref:`instrumental crosstalk <Instrumental polarisation>` between the linear and circular Stokes parameters. After running ``pippin --run_example`` again, the :math:`U_\phi` image shows a reduced signal.
 
 In the :ref:`next section <Usage instructions>` we will learn how to reduce other NACO polarimetric datasets.
