@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LogNorm, SymLogNorm
-#mpl.use('agg')
+mpl.use('agg')
 
 from astropy.io import fits
 from astropy.modeling import models, fitting
@@ -1058,9 +1058,6 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
         x-, y-coordinate of fitted beam-centers.
     '''
 
-    plt.imshow(im, extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-               norm=LogNorm())
-
     # Set the separation based on the used camera
     Moffat_y_offset = Wollaston_beam_separation(camera_used, filter_used)
 
@@ -1182,11 +1179,6 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
     else:
         x_ord, y_ord = fitted[0].parameters[1:3]
         x_ext, y_ext = fitted[1].parameters[1:3]
-
-    plt.scatter(x_ord, y_ord, c='r')
-    plt.scatter(x_ext, y_ext, c='r')
-    #plt.show()
-    plt.close()
 
     return np.array([[x_ext, y_ext],
                      [x_ord, y_ord]])
@@ -3048,7 +3040,6 @@ def saturated_pixel_mask(beams, saturated_counts):
 
     return spm
 
-
 def equalise_ord_ext_flux(r, spm, beams, r_inner_IPS, r_outer_IPS):
     '''
     Re-scale the flux in the ordinary and extra-ordinary beams with annuli.
@@ -3153,8 +3144,10 @@ def fit_offset_angle(r, phi, median_Q, median_U, r_crosstalk):
         Radius-array.
     phi : 1D-array
         Azimuthal angle.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
+    median_Q : 2D-array
+        Median Stokes Q parameter.
+    median_U : 2D-array
+        Median Stokes U parameter.
     r_crosstalk : list
         Inner and outer radius of the annulus used to correct for crosstalk.
 
@@ -3190,53 +3183,6 @@ def fit_offset_angle(r, phi, median_Q, median_U, r_crosstalk):
     theta = theta_all[np.argmin(U_phi_sum, axis=0)]
     return np.round(theta,2)
 
-"""
-def fit_offset_angle(r, phi, PDI_frames, r_crosstalk):
-    '''
-    Assess the offset angle to minimise the U_phi signal.
-
-    Input
-    -----
-    r : 1D-array
-        Radius-array.
-    phi : 1D-array
-        Azimuthal angle.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
-    r_crosstalk : list
-        Inner and outer radius of the annulus used to correct for crosstalk.
-
-    Output
-    ------
-    theta : float
-        Offset angle in degrees.
-    '''
-
-    # Assess offset angles in an annulus with clear signal
-    r_inner, r_outer = r_crosstalk
-    mask_annulus = (r >= r_inner) & (r <= r_outer)
-
-    # Evaluate offset angles from 0 to 90 in steps of 0.1 degrees
-    theta_all = np.arange(0,90+1e-5,0.1)
-
-    U_phi_sum = np.ones((len(theta_all),len(PDI_frames['P_I']))) * np.nan
-    for i, theta_i in enumerate(theta_all):
-
-        # Create new phi with an offset angle
-        phi_i = phi[None,:] + np.deg2rad(theta_i)
-
-        # Calculate U_phi with the offset angle
-        U_phi_i = + PDI_frames['median_Q_IPS'] * np.sin(2*phi_i) \
-                  - PDI_frames['median_U_IPS'] * np.cos(2*phi_i)
-
-        # Sum over pixels within the annulus
-        U_phi_sum[i] = np.abs(np.nansum(U_phi_i[:,mask_annulus], axis=1))
-
-    # Best offset angle is found when the sum of U_phi is smallest
-    theta = theta_all[np.argmin(U_phi_sum, axis=0)]
-    return np.round(theta,2)
-"""
-
 def individual_Stokes_frames(beams):
     '''
     Add / subtract ordinary and extra-ordinary beam to
@@ -3267,9 +3213,7 @@ def individual_Stokes_frames(beams):
 
     return ind_I, ind_QU
 
-def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
-                      crosstalk_correction, r, r_crosstalk,
-                      Wollaston_used, path_PDI):
+def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
     '''
     Apply the double-difference method to remove instrumental polarisation.
 
@@ -3283,21 +3227,19 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         Mask of the non-NaN values.
     StokesPara : 1D-array
         Stokes parameters ('Q+', 'U+', 'Q-', 'U-').
-    crosstalk_correction : bool
-        Correct for crosstalk_correction if True.
-    r : 1D-array
-        Radius-array.
-    r_crosstalk : list
-        Inner and outer radius of the annulus used to correct for crosstalk.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    path_PDI : str
-        Path to PDI output directory.
 
     Output
     ------
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
+    Q_frames : dict
+        Dictionary of Stokes Q images.
+    I_Q_frames : dict
+        Dictionary of Stokes Q intensity images.
+    U_frames : dict
+        Dictionary of Stokes U images.
+    I_U_frames : dict
+        Dictionary of Stokes U intensity images.
+    I_frames : dict
+        Dictionary of total intensity images.
     '''
 
     print_and_log('--- Double-difference method to remove instrumental polarisation (IP)')
@@ -3434,139 +3376,6 @@ def CTC(Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames, r, r_crosstalk):
 
     return Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames
 
-
-    """
-    # Save the Q, U and I images to a dictionary
-    PDI_frames = {'cube_Q': None, 'cube_U': None,
-                  'cube_I_Q': None, 'cube_I_U': None}
-
-    mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
-    mask_U = np.ma.mask_or((StokesPara=='U+'), (StokesPara=='U-'))
-
-    if len(np.unique(StokesPara)) == 4:
-        # Stokes Q, U images
-        PDI_frames['cube_Q'] = 1/2 * (ind_QU[StokesPara=='Q+'] -
-                                      ind_QU[StokesPara=='Q-'])
-        PDI_frames['cube_U'] = 1/2 * (ind_QU[StokesPara=='U+'] -
-                                      ind_QU[StokesPara=='U-'])
-
-        # Stokes Q, U intensity images
-        PDI_frames['cube_I_Q'] = 1/2 * (ind_I[StokesPara=='Q+'] +
-                                        ind_I[StokesPara=='Q-'])
-        PDI_frames['cube_I_U'] = 1/2 * (ind_I[StokesPara=='U+'] +
-                                        ind_I[StokesPara=='U-'])
-
-    else:
-
-        if mask_Q.any():
-            PDI_frames['cube_Q'] = ind_QU[mask_Q]
-            PDI_frames['cube_Q'][StokesPara[mask_Q]=='Q-'] *= -1 # Flip the sign
-
-            PDI_frames['cube_I_Q'] = ind_I[mask_Q]
-
-        if mask_U.any():
-            PDI_frames['cube_U'] = ind_QU[mask_U]
-            PDI_frames['cube_U'][StokesPara[mask_U]=='U-'] *= -1 # Flip the sign
-
-            PDI_frames['cube_I_U'] = ind_I[mask_U]
-
-    # Save PDI frames to disk and replace with path to save memory
-    for key in PDI_frames.keys():
-        if PDI_frames[key] is not None:
-            PDI_frames[key] = write_FITS_file(Path(path_PDI, f'{key}.fits'),
-                                              PDI_frames[key])
-
-    # Determine the U crosstalk-efficiency and correct
-    if crosstalk_correction and \
-        (PDI_frames['cube_Q'] is not None) and \
-        (PDI_frames['cube_U'] is not None):
-
-        print_and_log('--- Correcting for the crosstalk-efficiency of U')
-
-        # Applied to the median Q/U images
-        median_Q = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_Q'), axis=0)
-        median_U = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_U'), axis=0)
-        median_I_Q = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_I_Q'),
-                                  axis=0)
-        median_I_U = np.nanmedian(load_PDI_frames(PDI_frames, 'cube_I_U'),
-                                  axis=0)
-
-        # Loop over the ord./ext. flux-scaling annuli
-        e_U_all = []
-        for j in range(median_Q.shape[-1]):
-            e_U = fit_U_efficiency(median_Q[:,j], median_U[:,j],
-                                   median_I_Q[:,j], median_I_U[:,j],
-                                   r, r_crosstalk)
-            e_U_all.append(e_U)
-
-        e_U_all = np.array(e_U_all)
-        print_and_log(f'    Efficiency per IPS annulus: e_U = {list(e_U_all)}')
-
-        # Correct for the reduced efficiency
-        PDI_frames['cube_U']   = load_PDI_frames(PDI_frames, 'cube_U')
-        PDI_frames['cube_I_U'] = load_PDI_frames(PDI_frames, 'cube_I_U')
-        for key in ['cube_U', 'cube_I_U']:
-            PDI_frames[key] /= e_U_all[None,None,:]
-
-    if (PDI_frames['cube_Q'] is not None) and \
-        (PDI_frames['cube_U'] is not None):
-        # Total intensity images
-        PDI_frames['cube_I'] = 1/2 * (load_PDI_frames(PDI_frames, 'cube_I_Q') +
-                                      load_PDI_frames(PDI_frames, 'cube_I_U'))
-        PDI_frames['median_I'] = np.nanmedian(PDI_frames['cube_I'], axis=0,
-                                              keepdims=True)
-
-    if (PDI_frames['cube_Q'] is not None):
-        PDI_frames['median_Q']   = np.nanmedian(load_PDI_frames(PDI_frames,
-                                                                'cube_Q'),
-                                                axis=0, keepdims=True)
-        PDI_frames['median_I_Q'] = np.nanmedian(load_PDI_frames(PDI_frames,
-                                                                'cube_I_Q'),
-                                                axis=0, keepdims=True)
-
-    if (PDI_frames['cube_U'] is not None):
-        PDI_frames['median_U']   = np.nanmedian(load_PDI_frames(PDI_frames,
-                                                                'cube_U'),
-                                                axis=0, keepdims=True)
-        PDI_frames['median_I_U'] = np.nanmedian(load_PDI_frames(PDI_frames,
-                                                                'cube_I_U'),
-                                                axis=0, keepdims=True)
-
-    for QU_sel, I_deg in zip(['Q+', 'Q-', 'U+', 'U-'], [0, 90, 45, 135]):
-
-        mask_QU_sel = (StokesPara == QU_sel)
-        if QU_sel[1]=='+':
-            mask_QU_sel_alt = (StokesPara == QU_sel.replace('+','-'))
-        elif QU_sel[1]=='-':
-            mask_QU_sel_alt = (StokesPara == QU_sel.replace('-','+'))
-
-        if np.any(mask_QU_sel) and np.any(mask_QU_sel_alt):
-            if Wollaston_used:
-                # Save the individual Q+- and U+- measurements
-                PDI_frames[f'cube_I_{QU_sel}'] = ind_I[mask_QU_sel]
-                PDI_frames[f'median_I_{QU_sel}'] \
-                = np.nanmedian(ind_I[mask_QU_sel],
-                               axis=0, keepdims=True)
-
-                PDI_frames[f'cube_{QU_sel}'] = ind_QU[mask_QU_sel]
-                PDI_frames[f'median_{QU_sel}'] \
-                = np.nanmedian(ind_QU[mask_QU_sel],
-                               axis=0, keepdims=True)
-
-            else:
-                # Save the measurements
-                PDI_frames[f'cube_I_{I_deg}_deg'] = ind_I[mask_QU_sel]
-                PDI_frames[f'median_I_{I_deg}_deg'] \
-                = np.nanmedian(ind_I[mask_QU_sel],
-                               axis=0, keepdims=True)
-
-    for key in PDI_frames.keys():
-        if isinstance(PDI_frames[key], np.ndarray):
-            PDI_frames[key] = write_FITS_file(Path(path_PDI, f'{key}.fits'),
-                                              PDI_frames[key])
-    return PDI_frames
-    """
-
 def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     '''
     Apply instrumental polarisation subtraction by using annuli.
@@ -3650,35 +3459,46 @@ def IPS(r, spm, r_inner_IPS, r_outer_IPS, Q, U, I_Q, I_U, I):
     median_U_IPS = np.nanmedian(U_IPS, axis=0)
     return median_Q_IPS, median_U_IPS
 
-def final_Stokes_frames(r, phi, median_Q, median_U, theta=None):
+def final_Stokes_frames(median_Q, median_U, r_deprojected, phi, theta=None):
     '''
     Compute the final Stokes images.
 
     Input
     -----
-    r : 1D-array
-        Radius-array.
+    median_Q : 2D-array
+        Median Stokes Q parameter.
+    median_U : 2D-array
+        Median Stokes U parameter.
+    r_deprojected : 1D-array
+        De-projected radius array.
     phi : 1D-array
         Azimuthal angle.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
-    minimise_U_phi : bool
-        Minimise the signal in U_phi if True.
-    r_crosstalk : list
-        Inner and outer radius of the annulus used to correct for crosstalk.
+    theta : float or None
+        Offset-angle (in degrees) to minimise the U_phi-signal
 
     Output
     ------
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
+    PI : 2D array
+        Polarised intensity.
+    PI_r2 : 2D array
+        Polarised intensity scaled by the squared radius.
+    Q_phi : 2D-array
+        Azimuthal Stokes Q_phi parameter.
+    Q_phi_r2 : 2D-array
+        Azimuthal Stokes Q_phi parameter scaled by the squared radius.
+    U_phi : 2D-array
+        Azimuthal Stokes U_phi parameter.
+    U_phi_r2 : 2D-array
+        Azimuthal Stokes U_phi parameter scaled by the squared radius.
     '''
 
-    print_and_log('--- Creating final data products (PI, Q_phi, U_phi)')
+    r_deprojected = r_deprojected[:,None]
+    phi = phi[:,None]
 
     # Polarised intensity
-    PI = np.sqrt(median_Q**2 + median_U**2)
+    PI    = np.sqrt(median_Q**2 + median_U**2)
+    PI_r2 = PI * r_deprojected**2
 
-    phi = phi[:,None]
     if theta is not None:
         # Add offset angles to the phi array
         phi = phi + np.deg2rad(theta[None,:])
@@ -3687,9 +3507,12 @@ def final_Stokes_frames(r, phi, median_Q, median_U, theta=None):
     Q_phi = - median_Q*np.cos(2*phi) - median_U*np.sin(2*phi)
     U_phi = + median_Q*np.sin(2*phi) - median_U*np.cos(2*phi)
 
-    return PI, Q_phi, U_phi
+    Q_phi_r2 = Q_phi * r_deprojected**2
+    U_phi_r2 = U_phi * r_deprojected**2
 
-def UpC(r, phi, median_Q, median_U, r_crosstalk):
+    return PI, PI_r2, Q_phi, Q_phi_r2, U_phi, U_phi_r2
+
+def UpC(median_Q, median_U, r, r_crosstalk, r_deprojected, phi):
     '''
     U_phi correction.
     '''
@@ -3701,62 +3524,12 @@ def UpC(r, phi, median_Q, median_U, r_crosstalk):
 
     print_and_log(f'    Offset angle per IPS annulus: theta (deg) = {list(theta)}')
 
-    _, Q_phi_UpC, U_phi_UpC = final_Stokes_frames(r, phi, median_Q, median_U,
-                                                  theta=theta)
-    return Q_phi_UpC, U_phi_UpC
+    _, _, \
+    Q_phi_UpC, Q_phi_UpC_r2, \
+    U_phi_UpC, U_phi_UpC_r2 \
+    = final_Stokes_frames(median_Q, median_U, r_deprojected, phi, theta=theta)
 
-"""
-def final_Stokes_frames(r, phi, PDI_frames, minimise_U_phi, r_crosstalk):
-    '''
-    Compute the final Stokes images.
-
-    Input
-    -----
-    r : 1D-array
-        Radius-array.
-    phi : 1D-array
-        Azimuthal angle.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
-    minimise_U_phi : bool
-        Minimise the signal in U_phi if True.
-    r_crosstalk : list
-        Inner and outer radius of the annulus used to correct for crosstalk.
-
-    Output
-    ------
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
-    '''
-
-    print_and_log('--- Creating final data products (PI, Q_phi, U_phi)')
-
-    # De-projected radius
-    PDI_frames['r'] = r[None,:]
-
-    # polarised intensity image
-    PDI_frames['P_I'] = np.sqrt(PDI_frames['median_Q_IPS']**2 + \
-                                PDI_frames['median_U_IPS']**2)
-
-    if minimise_U_phi:
-        print_and_log('--- Minimising the U_phi signal')
-
-        # Minimise the sum of U_phi in an annulus
-        theta = fit_offset_angle(r, phi, PDI_frames, r_crosstalk)
-
-        print_and_log(f'    Offset angle per IPS annulus: theta (deg) = {list(theta)}')
-
-        # Add the best offset angles to the phi array
-        phi = phi[None,:] + np.deg2rad(theta[:,None])
-
-    # Azimuthal Stokes parameters
-    PDI_frames['Q_phi'] = - PDI_frames['median_Q_IPS']*np.cos(2*phi) \
-                          - PDI_frames['median_U_IPS']*np.sin(2*phi)
-    PDI_frames['U_phi'] = + PDI_frames['median_Q_IPS']*np.sin(2*phi) \
-                          - PDI_frames['median_U_IPS']*np.cos(2*phi)
-
-    return PDI_frames, phi
-"""
+    return Q_phi_UpC, Q_phi_UpC_r2, U_phi_UpC, U_phi_UpC_r2
 
 def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
     '''
@@ -4017,8 +3790,29 @@ def write_header(object_name, mask_beams):
 
     return hdu
 
-def save_PDI_frames(path_PDI, frames, type, mask_beams, hdu,
-                    HWP_used, pos_angle):
+def save_PDI_frames(type, frames, mask_beams, HWP_used,
+                    pos_angle, hdu, path_PDI):
+
+    '''
+    Save the resulting images from PDI.
+
+    Input
+    -----
+    type : str
+        Type of frames to save.
+    frames : dict
+        Dictionary of frames to save.
+    mask_beams : 2D-array
+        Mask of the non_NaN values.
+    HWP_used : bool
+        If True, HWP was used, else position angle was changed.
+    pos_angle : float
+        Position angle of the observation.
+    hdu : astropy HDUList object
+
+    path_PDI : str
+        Path to PDI output directory.
+    '''
 
     if type == 'Q':
         keys_to_read = ['cube_Q', 'median_Q', 'median_Q_IPS',
@@ -4056,13 +3850,19 @@ def save_PDI_frames(path_PDI, frames, type, mask_beams, hdu,
         keys_to_read = ['cube_I', 'median_I', 'cube_I_CTC', 'median_I_CTC']
 
     elif type == 'PI':
-        keys_to_read = ['PI', 'PI_IPS', 'PI_CTC_IPS']
+        keys_to_read = ['PI', 'PI_r2',
+                        'PI_IPS', 'PI_IPS_r2',
+                        'PI_CTC_IPS', 'PI_CTC_IPS_r2']
     elif type == 'Q_phi':
-        keys_to_read = ['Q_phi', 'Q_phi_IPS', 'Q_phi_CTC_IPS',
-                        'Q_phi_UpC_CTC_IPS']
+        keys_to_read = ['Q_phi', 'Q_phi_r2',
+                        'Q_phi_IPS', 'Q_phi_IPS_r2',
+                        'Q_phi_CTC_IPS', 'Q_phi_CTC_IPS_r2',
+                        'Q_phi_UpC_CTC_IPS', 'Q_phi_UpC_CTC_IPS_r2']
     elif type == 'U_phi':
-        keys_to_read = ['U_phi', 'U_phi_IPS', 'U_phi_CTC_IPS',
-                        'U_phi_UpC_CTC_IPS']
+        keys_to_read = ['U_phi', 'U_phi_r2',
+                        'U_phi_IPS', 'U_phi_IPS_r2',
+                        'U_phi_CTC_IPS', 'U_phi_CTC_IPS_r2',
+                        'U_phi_UpC_CTC_IPS', 'U_phi_UpC_CTC_IPS_r2']
 
     hdu_list = fits.HDUList(hdu)
 
@@ -4099,104 +3899,15 @@ def save_PDI_frames(path_PDI, frames, type, mask_beams, hdu,
                 new_im_to_save = np.moveaxis(new_im_to_save, -1, 0)
 
             # Append to the HDU list
-            hdu_list.append(fits.ImageHDU(new_im_to_save, name=key))
+            hdu_list.append(fits.ImageHDU(new_im_to_save, name=key,
+                                          header=hdu.header)
+                            )
 
-    hdu_list.writeto(Path(path_PDI, f'{type}.fits'),
-                     output_verify='silentfix',
-                     overwrite=True)
-
-"""
-def save_PDI_frames(path_PDI, PDI_frames, object_name, mask_beams,
-                    HWP_used, pos_angle, keys='all'):
-    '''
-    Save the resulting images from PDI.
-
-    Input
-    -----
-    path_PDI : str
-        Path to PDI output directory.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
-    object_name : str
-        Object's name.
-    mask_beams : 2D-array
-        Mask of the non-NaN values.
-    HWP_used : bool
-        If True, HWP was used, else position angle was changed.
-    pos_angle : float
-        Position angle of the observation.
-    '''
-
-    # Convert strings to a list of strings
-    if isinstance(keys, list):
-        keys_to_save = keys
-    else:
-        if keys=='all':
-            keys_to_save = list(PDI_frames.keys())
-        else:
-            keys_to_save = list(keys)
-
-    array_size = []
-    for key in keys_to_save:
-        if isinstance(PDI_frames[key], np.ndarray):
-            array_size.append(PDI_frames[key].size)
-        else:
-            array_size.append(np.inf)
-
-    keys_to_save = np.array(keys_to_save)[np.argsort(array_size)]
-
-    # Create a header
-    mask_beams_rotated = rotate_cube(mask_beams, pos_angle,
-                                     pad=False, rotate_axes=(0,1))
-    hdu = write_header(object_name, mask_beams_rotated)
-    del mask_beams_rotated
-
-    # Save all images in the PDI_frames dictionary
-    for key in keys_to_save:
-
-        im_to_save = load_PDI_frames(PDI_frames, key)
-        # Remove the entry from the dictionary
-        del PDI_frames[key]
-
-        if im_to_save is not None:
-
-            # Move the pixel-axis to the first axis
-            im_to_save = np.moveaxis(im_to_save, 1, -1)
-
-            # Reshape the array to form an image
-            new_shape      = (*im_to_save.shape[:-1], *mask_beams.shape)
-            new_im_to_save = np.ones(new_shape) * np.nan
-
-            if len(new_shape)==2:
-                new_im_to_save[mask_beams] = im_to_save
-            elif len(new_shape)==3:
-                new_im_to_save[:,mask_beams] = im_to_save
-            elif len(new_shape)==4:
-                new_im_to_save[:,:,mask_beams] = im_to_save
-                new_im_to_save = np.swapaxes(new_im_to_save, 0, 1)
-
-            im_to_save = new_im_to_save
-            del new_im_to_save
-
-            # Remove axes of length 1
-            im_to_save = np.squeeze(im_to_save)
-
-            if len(im_to_save.shape) == 2:
-                im_to_save = im_to_save[None,:]
-
-            if HWP_used:
-                # Rotate the image
-                im_to_save = list(im_to_save)
-                for i in range(len(im_to_save)):
-                    im_to_save[i] = rotate_cube(im_to_save[i][None,:],
-                                                pos_angle, pad=False,
-                                                rotate_axes=(-2,-1))[0]
-                im_to_save = np.array(im_to_save)
-            write_FITS_file(Path(path_PDI, f'{key}.fits'),
-                            im_to_save, header=hdu.header)
-
-        del im_to_save
-"""
+    if len(hdu_list) > 1:
+        # Save the HDU list if it is not empty
+        hdu_list.writeto(Path(path_PDI, f'{type}.fits'),
+                         output_verify='silentfix',
+                         overwrite=True)
 
 def load_PDI_frames(PDI_frames, key):
 
@@ -4347,92 +4058,102 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     Q_frames, I_Q_frames, \
     U_frames, I_U_frames, \
     I_frames \
-    = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
-                        crosstalk_correction, r, r_crosstalk,
-                        Wollaston_used, path_PDI)
+    = double_difference(ind_I, ind_QU, mask_beams, StokesPara)
     del ind_I, ind_QU
 
-    if (Q_frames['cube_Q'] is not None) and \
-        (U_frames['cube_U'] is not None):
+    if (Q_frames['cube_Q'] is not None) and (U_frames['cube_U'] is not None):
 
-        # Instrumental polarisation correction
+        # Dictionaries to store the final data products in
+        PI_frames, Q_phi_frames, U_phi_frames = {}, {}, {}
+
+        # Final data products without IP-corrections
+        PI_frames['PI'], PI_frames['PI_r2'], \
+        Q_phi_frames['Q_phi'], Q_phi_frames['Q_phi_r2'], \
+        U_phi_frames['U_phi'], U_phi_frames['U_phi_r2'] \
+        = final_Stokes_frames(Q_frames['median_Q'], U_frames['median_U'],
+                              r_deprojected, phi)
+
+        # Instrumental polarisation subtraction
         print_and_log('--- IP-subtraction (IPS) using annuli with unpolarised stellar signal')
         Q_frames['median_Q_IPS'], \
         U_frames['median_U_IPS'] \
         = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-              Q=Q_frames['cube_Q'], U=U_frames['cube_U'],
-              I_Q=I_Q_frames['cube_I_Q'], I_U=I_U_frames['cube_I_U'],
+              Q=Q_frames['cube_Q'],
+              U=U_frames['cube_U'],
+              I_Q=I_Q_frames['cube_I_Q'],
+              I_U=I_U_frames['cube_I_U'],
               I=I_frames['cube_I'])
 
-        PI_frames, Q_phi_frames, U_phi_frames = {}, {}, {}
-        # Final Stokes frames
-        PI_frames['PI'], Q_phi_frames['Q_phi'], U_phi_frames['U_phi'] \
-        = final_Stokes_frames(r, phi, Q_frames['median_Q'],
-                              U_frames['median_U'])
-
-        PI_frames['PI_IPS'], \
-        Q_phi_frames['Q_phi_IPS'], \
-        U_phi_frames['U_phi_IPS'] \
-        = final_Stokes_frames(r, phi, Q_frames['median_Q_IPS'],
-                              U_frames['median_U_IPS'])
+        # IP-subtracted final data products
+        PI_frames['PI_IPS'], PI_frames['PI_IPS_r2'], \
+        Q_phi_frames['Q_phi_IPS'], Q_phi_frames['Q_phi_IPS_r2'], \
+        U_phi_frames['U_phi_IPS'], U_phi_frames['U_phi_IPS_r2'] \
+        = final_Stokes_frames(Q_frames['median_Q_IPS'],
+                              U_frames['median_U_IPS'],
+                              r_deprojected, phi)
 
         if crosstalk_correction:
 
+            # Fit for the reduced U-efficiency
             Q_frames, I_Q_frames, \
             U_frames, I_U_frames, \
             I_frames \
             = CTC(Q_frames, I_Q_frames, U_frames, I_U_frames,
                   I_frames, r, r_crosstalk)
 
-            # Instrumental polarisation correction
+            # Crosstalk-corrected + IP-subtracted Stokes Q and U parameters
             Q_frames['median_Q_CTC_IPS'], \
             U_frames['median_U_CTC_IPS'] \
             = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-                  Q=Q_frames['cube_Q'], U=U_frames['cube_U_CTC'],
-                  I_Q=I_Q_frames['cube_I_Q'], I_U=I_U_frames['cube_I_U_CTC'],
+                  Q=Q_frames['cube_Q'],
+                  U=U_frames['cube_U_CTC'],
+                  I_Q=I_Q_frames['cube_I_Q'],
+                  I_U=I_U_frames['cube_I_U_CTC'],
                   I=I_frames['cube_I_CTC'])
 
-            """
-            # Final Stokes frames
-            PI_frames['PI_CTC'], \
-            Q_phi_frames['Q_phi_CTC'], \
-            U_phi_frames['U_phi_CTC'] \
-            = final_Stokes_frames(r, phi, Q_frames['median_Q_CTC'],
-                                  U_frames['median_U_CTC'])
-            """
-
-            PI_frames['PI_CTC_IPS'], \
-            Q_phi_frames['Q_phi_CTC_IPS'], \
-            U_phi_frames['U_phi_CTC_IPS'] \
-            = final_Stokes_frames(r, phi, Q_frames['median_Q_CTC_IPS'],
-                                  U_frames['median_U_CTC_IPS'])
+            # Crosstalk-corrected final data products
+            PI_frames['PI_CTC_IPS'], PI_frames['PI_CTC_IPS_r2'], \
+            Q_phi_frames['Q_phi_CTC_IPS'], Q_phi_frames['Q_phi_CTC_IPS_r2'], \
+            U_phi_frames['U_phi_CTC_IPS'], U_phi_frames['U_phi_CTC_IPS_r2'] \
+            = final_Stokes_frames(Q_frames['median_Q_CTC_IPS'],
+                                  U_frames['median_U_CTC_IPS'],
+                                  r_deprojected, phi)
 
         if minimise_U_phi:
 
+            # Minimise the signal in U_phi
             Q_phi_frames['Q_phi_UpC_CTC_IPS'], \
-            U_phi_frames['U_phi_UpC_CTC_IPS'] \
-            = UpC(r, phi, Q_frames['median_Q_CTC_IPS'],
-                  U_frames['median_U_CTC_IPS'], r_crosstalk)
+            Q_phi_frames['Q_phi_UpC_CTC_IPS_r2'], \
+            U_phi_frames['U_phi_UpC_CTC_IPS'], \
+            U_phi_frames['U_phi_UpC_CTC_IPS_r2'] \
+            = UpC(Q_frames['median_Q_CTC_IPS'],
+                  U_frames['median_U_CTC_IPS'],
+                  r, r_crosstalk, r_deprojected, phi)
 
-        save_PDI_frames(path_PDI, PI_frames, 'PI', mask_beams,
-                        hdu, HWP_used, pos_angles[0])
-        save_PDI_frames(path_PDI, Q_phi_frames, 'Q_phi', mask_beams,
-                        hdu, HWP_used, pos_angles[0])
-        save_PDI_frames(path_PDI, U_phi_frames, 'U_phi', mask_beams,
-                        hdu, HWP_used, pos_angles[0])
+        # Extended data products ...
 
-    save_PDI_frames(path_PDI, Q_frames, 'Q', mask_beams,
-                    hdu, HWP_used, pos_angles[0])
-    save_PDI_frames(path_PDI, I_Q_frames, 'I_Q', mask_beams,
-                    hdu, HWP_used, pos_angles[0])
+        # Save the data frames
+        save_PDI_frames('PI', PI_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
+        save_PDI_frames('Q_phi', Q_phi_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
+        save_PDI_frames('U_phi', U_phi_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
 
-    save_PDI_frames(path_PDI, U_frames, 'U', mask_beams,
-                    hdu, HWP_used, pos_angles[0])
-    save_PDI_frames(path_PDI, I_U_frames, 'I_U', mask_beams,
-                    hdu, HWP_used, pos_angles[0])
+    # Save the data frames
+    for sign in ['', '+', '-']:
+        save_PDI_frames(f'Q{sign}', Q_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
+        save_PDI_frames(f'I_Q{sign}', I_Q_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
 
-    save_PDI_frames(path_PDI, I_frames, 'I', mask_beams,
-                    hdu, HWP_used, pos_angles[0])
+        save_PDI_frames(f'U{sign}', U_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
+        save_PDI_frames(f'I_U{sign}', I_U_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
+
+    save_PDI_frames('I', I_frames, mask_beams, HWP_used,
+                    pos_angles[0], hdu, path_PDI)
 
     """
     PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
