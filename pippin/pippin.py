@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import LogNorm, SymLogNorm
-mpl.use('agg')
+#mpl.use('agg')
 
 from astropy.io import fits
 from astropy.modeling import models, fitting
@@ -3338,9 +3338,9 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara,
         # Retrieve the double-difference Stokes parameters if possible
         if mask_QU_plus.any() and mask_QU_min.any():
             QU_frames[f'cube_{key}']     = 1/2*(ind_QU[mask_QU_plus] - \
-                                               ind_QU[mask_Qmin])
+                                                ind_QU[mask_QU_min])
             I_QU_frames[f'cube_I_{key}'] = 1/2*(ind_I[mask_QU_plus] + \
-                                               ind_I[mask_QU_min])
+                                                ind_I[mask_QU_min])
         elif mask_QU_plus.any() and not mask_QU_min.any():
             QU_frames[f'cube_{key}']     = ind_QU[mask_QU_plus]
             I_QU_frames[f'cube_I_{key}'] = ind_I[mask_QU_plus]
@@ -4064,10 +4064,9 @@ def save_PDI_frames(path_PDI, frames, type, mask_beams, hdu,
         keys_to_read = ['U_phi', 'U_phi_IPS', 'U_phi_CTC_IPS',
                         'U_phi_UpC_CTC_IPS']
 
-    print('')
     hdu_list = fits.HDUList(hdu)
 
-    for key in frames.keys():
+    for i, key in enumerate(frames.keys()):
         if key in keys_to_read:
 
             # Move the pixel-axis to the first axis
@@ -4098,7 +4097,6 @@ def save_PDI_frames(path_PDI, frames, type, mask_beams, hdu,
             elif new_im_to_save.ndim == 4:
                 new_im_to_save = np.moveaxis(new_im_to_save, -1, 0)
                 new_im_to_save = np.moveaxis(new_im_to_save, -1, 0)
-            print(key, new_im_to_save.shape)
 
             # Append to the HDU list
             hdu_list.append(fits.ImageHDU(new_im_to_save, name=key))
@@ -4420,7 +4418,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
                         hdu, HWP_used, pos_angles[0])
         save_PDI_frames(path_PDI, Q_phi_frames, 'Q_phi', mask_beams,
                         hdu, HWP_used, pos_angles[0])
-        save_PDI_frames(path_PDI, Q_phi_frames, 'U_phi', mask_beams,
+        save_PDI_frames(path_PDI, U_phi_frames, 'U_phi', mask_beams,
                         hdu, HWP_used, pos_angles[0])
 
     save_PDI_frames(path_PDI, Q_frames, 'Q', mask_beams,
