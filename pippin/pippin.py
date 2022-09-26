@@ -3531,15 +3531,24 @@ def UpC(median_Q, median_U, r, r_crosstalk, r_deprojected, phi):
 
     return Q_phi_UpC, Q_phi_UpC_r2, U_phi_UpC, U_phi_UpC_r2
 
-def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
+def extended_Stokes_frames(Q_frames, I_Q_frames, U_frames, I_U_frames,
+                           I_frames, PI_frames,
+                           spm, r_inner_IPS, r_outer_IPS,
+                           r, r_deprojected, phi
+                           ):
     '''
     Produce extended total and polarised intensity images by
     exploiting greater sky coverage of non-HWP observations.
 
     Input
     -----
-    r : 1D-array
-        Radius-array.
+    Q_frames : dict
+    I_Q_frames : dict
+    U_frames : dict
+    I_U_frames : dict
+    I_frames : dict
+    PI_frames : dict
+
     spm : 1D-array
         Saturated pixel mask.
     r_inner_IPS : list
@@ -3548,79 +3557,86 @@ def extended_Stokes_frames(r, spm, r_inner_IPS, r_outer_IPS, PDI_frames):
     r_outer_IPS : list
         Outer radii of the annuli used in IP-subtraction and ord./ext.
         re-scaling.
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
+    r : 1D-array
+        Radius-array.
+    r_deprojected : 1D-array
+        De-projected radius array.
+    phi : 1D-array
+        Azimuthal angle.
 
     Output
     ------
-    PDI_frames : dict
-        Dictionary of images resulting from PDI.
+    Q_frames : dict
+    I_Q_frames : dict
+    U_frames : dict
+    I_U_frames : dict
+    I_frames : dict
+    PI_frames : dict
+
     '''
 
-    print_and_log('--- Producing extended data products')
+    print_and_log('--- Generating extended data products')
 
-    # Arrays to store the masks and extended frames in
-    Q_extended = np.moveaxis(np.zeros(PDI_frames['cube_Q'].shape[1:]), -1, 0)
-    U_extended = np.moveaxis(np.zeros(PDI_frames['cube_U'].shape[1:]), -1, 0)
-    I_extended = np.moveaxis(np.zeros(PDI_frames['cube_I'].shape[1:]), -1, 0)
+    # Extended frames, averaged over the redundant (+,-) observations
+    Q_frames['cube_Q_extended'] = np.nanmean(np.array([Q_frames['cube_Q+'],
+                                                       -Q_frames['cube_Q-']]),
+                                             axis=0)
+    U_frames['cube_U_extended'] = np.nanmean(np.array([U_frames['cube_U+'],
+                                                       -U_frames['cube_U-']]),
+                                             axis=0)
 
-    mask_Q_extended = np.zeros(Q_extended.shape, dtype=np.int8)
-    mask_U_extended = np.zeros(U_extended.shape, dtype=np.int8)
-    mask_extended   = np.zeros(I_extended.shape, dtype=np.int8)
+    I_Q_frames['cube_I_Q_extended'] = np.nanmean(
+                                          np.array([I_Q_frames['cube_I_Q+'],
+                                                    I_Q_frames['cube_I_Q-']]),
+                                          axis=0)
+    I_U_frames['cube_I_U_extended'] = np.nanmean(
+                                          np.array([I_U_frames['cube_I_U+'],
+                                                    I_U_frames['cube_I_U-']]),
+                                          axis=0)
 
-    # Loop over each combination of Q+, Q-, U+, and U-
-    for pm_Q_i, pm_U_i in zip(['+','+','-','-'], ['+','-','+','-']):
+    I_frames['cube_I_extended'] = np.nanmean(
+                                    np.array([I_Q_frames['cube_I_Q_extended'],
+                                              I_Q_frames['cube_I_Q_extended']]),
+                                    axis=0)
 
-        # Obtain the Q and U intensities
-        Q_i = PDI_frames[f'cube_Q{pm_Q_i}']
-        U_i = PDI_frames[f'cube_U{pm_U_i}']
-        I_Q_i  = PDI_frames[f'cube_I_Q{pm_Q_i}']
-        I_U_i  = PDI_frames[f'cube_I_U{pm_U_i}']
-        I_QU_i = np.sqrt(I_Q_i**2 + I_U_i**2)
+    # Median extended frames
+    Q_frames['median_Q_extended'] = np.nanmedian(Q_frames['cube_Q_extended'],
+                                                 axis=0)
+    U_frames['median_U_extended'] = np.nanmedian(U_frames['cube_U_extended'],
+                                                 axis=0)
+    I_Q_frames['median_I_Q_extended'] = np.nanmedian(
+                                            I_Q_frames['cube_I_Q_extended'],
+                                            axis=0)
+    I_U_frames['median_I_U_extended'] = np.nanmedian(
+                                            I_U_frames['cube_I_U_extended'],
+                                            axis=0)
+    I_frames['median_I_extended'] = np.nanmedian(I_frames['cube_I_extended'],
+                                                 axis=0)
 
-        # Perform IP-subtraction
-        Q_i, U_i = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-                       Q_i, U_i, I_Q_i, I_U_i, I_QU_i)
+    # Final data products without IP-corrections
+    PI_frames['PI_extended'], PI_frames['PI_r2_extended'], _, _, _, _ \
+    = final_Stokes_frames(Q_frames['median_Q_extended'],
+                          U_frames['median_U_extended'],
+                          r_deprojected, phi)
 
-        # Median-combine over cycles
-        I_Q_i  = np.moveaxis(np.nanmedian(I_Q_i, axis=0), -1, 0)
-        I_U_i  = np.moveaxis(np.nanmedian(I_U_i, axis=0), -1, 0)
-        I_QU_i = np.sqrt(I_Q_i**2 + I_U_i**2)
+    # Perform IP-subtraction
+    Q_frames['median_Q_IPS_extended'], \
+    U_frames['median_U_IPS_extended'] \
+    = IPS(r, spm, r_inner_IPS, r_outer_IPS,
+          Q_frames['cube_Q_extended'],
+          U_frames['cube_U_extended'],
+          I_Q_frames['cube_I_Q_extended'],
+          I_U_frames['cube_I_U_extended'],
+          I_frames['cube_I_extended']
+          )
 
-        mask_Q_i = ~np.isnan(Q_i)
-        mask_U_i = ~np.isnan(U_i)
+    # Final IP-subtracted data products
+    PI_frames['PI_IPS_extended'], PI_frames['PI_IPS_r2_extended'], _, _, _, _ \
+    = final_Stokes_frames(Q_frames['median_Q_IPS_extended'],
+                          U_frames['median_U_IPS_extended'],
+                          r_deprojected, phi)
 
-        # Flip the signal of Q- and U- observations
-        Q_extended[mask_Q_i] += float(pm_Q_i+'1') * Q_i[mask_Q_i]
-        U_extended[mask_U_i] += float(pm_U_i+'1') * U_i[mask_U_i]
-
-        I_extended[mask_Q_i*mask_U_i] += I_QU_i[mask_Q_i*mask_U_i]**2
-
-        # Add to complete mask
-        mask_Q_extended += mask_Q_i
-        mask_U_extended += mask_U_i
-        mask_extended   += mask_Q_i * mask_U_i
-
-    # Normalise pixels by number of covering observations
-    Q_extended[mask_Q_extended!=0] /= mask_Q_extended[mask_Q_extended!=0]
-    U_extended[mask_U_extended!=0] /= mask_U_extended[mask_U_extended!=0]
-
-    Q_extended[mask_Q_extended==0] = np.nan
-    U_extended[mask_U_extended==0] = np.nan
-
-    PDI_frames['median_Q_IPS_extended'] = Q_extended
-    PDI_frames['median_U_IPS_extended'] = U_extended
-
-    # Total I of overlapping Q and U signal
-    I_extended[mask_extended!=0] /= mask_extended[mask_extended!=0]
-    I_extended[mask_extended==0] = np.nan
-    PDI_frames['median_I_extended'] = np.sqrt(I_extended)
-
-    # PI of overlapping Q and U signal
-    PDI_frames['P_I_extended'] = (PDI_frames['median_Q_IPS_extended']**2 + \
-                                  PDI_frames['median_U_IPS_extended']**2)**(1/2)
-
-    return PDI_frames
+    return Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames, PI_frames
 
 def write_header_coordinates(file, header, object_name, mask_beams):
     '''
@@ -3816,9 +3832,12 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
 
     if type == 'Q':
         keys_to_read = ['cube_Q', 'median_Q', 'median_Q_IPS',
-                        'median_Q_CTC_IPS']
+                        'median_Q_CTC_IPS',
+                        'cube_Q_extended', 'median_Q_extended',
+                        'median_Q_IPS_extended']
     elif type == 'I_Q':
-        keys_to_read = ['cube_I_Q', 'median_I_Q']
+        keys_to_read = ['cube_I_Q', 'median_I_Q',
+                        'cube_I_Q_extended', 'median_I_Q_extended']
     elif type == 'Q+':
         keys_to_read = ['cube_Q+', 'median_Q+']
     elif type == 'I_Q+':
@@ -3830,11 +3849,13 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
 
     elif type == 'U':
         keys_to_read = ['cube_U', 'median_U', 'median_U_IPS',
-                        'cube_U_CTC', 'median_U_CTC',
-                        'median_U_CTC_IPS']
+                        'cube_U_CTC', 'median_U_CTC', 'median_U_CTC_IPS',
+                        'cube_U_extended', 'median_U_extended',
+                        'median_U_IPS_extended']
     elif type == 'I_U':
         keys_to_read = ['cube_I_U', 'median_I_U', 'cube_I_U_CTC',
-                        'median_I_U_CTC']
+                        'median_I_U_CTC',
+                        'cube_I_U_extended', 'median_I_U_extended']
     elif type == 'U+':
         keys_to_read = ['cube_U+', 'median_U+', 'cube_U+_CTC', 'median_U+_CTC']
     elif type == 'I_U+':
@@ -3847,12 +3868,14 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
                         'median_I_U-_CTC']
 
     elif type == 'I':
-        keys_to_read = ['cube_I', 'median_I', 'cube_I_CTC', 'median_I_CTC']
+        keys_to_read = ['cube_I', 'median_I', 'cube_I_CTC', 'median_I_CTC',
+                        'cube_I_extended', 'median_I_extended']
 
     elif type == 'PI':
-        keys_to_read = ['PI', 'PI_r2',
-                        'PI_IPS', 'PI_IPS_r2',
-                        'PI_CTC_IPS', 'PI_CTC_IPS_r2']
+        keys_to_read = ['PI', 'PI_r2', 'PI_IPS', 'PI_IPS_r2',
+                        'PI_CTC_IPS', 'PI_CTC_IPS_r2',
+                        'PI_extended', 'PI_r2_extended',
+                        'PI_IPS_extended', 'PI_IPS_r2_extended']
     elif type == 'Q_phi':
         keys_to_read = ['Q_phi', 'Q_phi_r2',
                         'Q_phi_IPS', 'Q_phi_IPS_r2',
@@ -4130,7 +4153,15 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
                   U_frames['median_U_CTC_IPS'],
                   r, r_crosstalk, r_deprojected, phi)
 
-        # Extended data products ...
+        if not HWP_used and Wollaston_used:
+
+            # Create extended images if the position angle was rotated
+            Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames, PI_frames \
+            = extended_Stokes_frames(Q_frames, I_Q_frames,
+                                     U_frames, I_U_frames,
+                                     I_frames, PI_frames,
+                                     spm, r_inner_IPS, r_outer_IPS, r,
+                                     r_deprojected, phi)
 
         # Save the data frames
         save_PDI_frames('PI', PI_frames, mask_beams, HWP_used,
