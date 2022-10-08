@@ -118,7 +118,7 @@ Centering
 
    ``single-Moffat``, ``double-Moffat``, ``maximum`` (default = ``single-Moffat``)
 
-   Method to use for fitting the :ref:`beam-centres <Beam-centre fitting>`. If `centering_method` is set to ``single-Moffat``, PIPPIN uses a Moffat function for each beam to locate the ordinary and extra-ordinary beam-centres. If `centering_method` is set to ``double-Moffat``, PIPPIN utilises two Moffat functions, one subtracted from the other, to replicate the flat top of saturated beams. If `centering_method` is set to ``maximum``, PIPPIN locates the beam-centres as the brightest pixel in a median-filtered image (using a 3:math:`\times`3 box). In general, the ``single-Moffat`` option should give a sufficiently accurate assessment of the beam-centres.
+   Method to use for fitting the :ref:`beam-centres <Beam-centre fitting>`. If `centering_method` is set to ``single-Moffat``, PIPPIN uses a Moffat function for each beam to locate the ordinary and extra-ordinary beam-centres. If `centering_method` is set to ``double-Moffat``, PIPPIN utilises two Moffat functions, one subtracted from the other, to replicate the flat top of saturated beams. If `centering_method` is set to ``maximum``, PIPPIN locates the beam-centres as the brightest pixel in a median-filtered image (using a 3 :math:`\times` 3 box). In general, the ``single-Moffat`` option should give a sufficiently accurate assessment of the beam-centres.
 
 
 .. py:function:: tied_offset:
@@ -149,7 +149,7 @@ PDI options
 
    `list` or `integer` (default = ``[3,6,9,12,15]``)
 
-   Outer radii of the annuli that PIPPIN uses to equalise the flux in the ordinary and extra-ordinary beams. These annuli are also used to perform the IP-subtraction under the assumption that the stellar light in the annulus is unpolarised (see:ref:`Instrumental polarisation <Instrumental polarisation>`).
+   Outer radii of the annuli that PIPPIN uses to equalise the flux in the ordinary and extra-ordinary beams. These annuli are also used to perform the IP-subtraction under the assumption that the stellar light in the annulus is unpolarised (see :ref:`Instrumental polarisation <Instrumental polarisation>`).
 
 
 .. _crosstalk_correction:

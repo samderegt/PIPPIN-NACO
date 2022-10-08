@@ -1674,7 +1674,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
 
     offsets = []
     for i in range(len(path_reduced_files_selected)):
-        offsets.append(np.nanmean(beam_centers[i][:,:,0], axis=(0,1)))
+        offsets.append(np.nanmean(beam_centers[i][:,:,:], axis=(0,1)))
     offsets = np.array(offsets)
 
     idx_offsets = np.arange(len(offsets))
@@ -1693,12 +1693,14 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
         new_min_offset = min_offset
 
         # Mask of cubes with sufficient offsets
-        mask_sufficient_offset = (np.abs(offsets-offsets[i]) >= new_min_offset)
+        mask_sufficient_offset = (np.sqrt(np.sum((offsets-offsets[i])**2,
+                                                 axis=1)) >= new_min_offset)
 
         while not np.any(mask_sufficient_offset):
             # Decrease the offset and try again
             new_min_offset -= 5
-            mask_sufficient_offset = (np.abs(offsets-offsets[i]) >= new_min_offset)
+            mask_sufficient_offset = (np.sqrt(np.sum((offsets-offsets[i])**2,
+                                                     axis=1)) >= new_min_offset)
 
             if (new_min_offset < 60):
                 sky_subtraction_box_median([file], np.array([beam_centers[i]]),
@@ -1747,6 +1749,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
         # Subtract the next dithering position from the original
         cube -= np.nanmedian(cube_next_offset, axis=0, keepdims=True)
 
+        """
         # Remove any leftover background signal with linear fits
         for j in range(len(cube)):
             y_j = beam_centers[i][j,:,1]
@@ -1754,7 +1757,7 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
                                           offsets[idx_next_offset],
                                           min_offset, y_j,
                                           remove_horizontal_stripes)
-
+        """
         # Add filename
         file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
         path_skysub_files_selected.append(file_skysub)
@@ -3277,24 +3280,33 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
     def double_difference_QU(QU_frames, I_QU_frames, key,
                              mask_QU_min, mask_QU_plus):
 
+        mask_QU = np.ma.mask_or(mask_QU_min, mask_QU_plus)
+
         # Retrieve the double-difference Stokes parameters if possible
-        if mask_QU_plus.any() and mask_QU_min.any():
+        if (mask_QU_plus.sum() == mask_QU_min.sum()) and mask_QU_plus.any():
             QU_frames[f'cube_{key}']     = 1/2*(ind_QU[mask_QU_plus] - \
                                                 ind_QU[mask_QU_min])
             I_QU_frames[f'cube_I_{key}'] = 1/2*(ind_I[mask_QU_plus] + \
                                                 ind_I[mask_QU_min])
-        elif mask_QU_plus.any() and not mask_QU_min.any():
-            QU_frames[f'cube_{key}']     = ind_QU[mask_QU_plus]
-            I_QU_frames[f'cube_I_{key}'] = ind_I[mask_QU_plus]
-        elif not mask_QU_plus.any() and mask_QU_min.any():
-            QU_frames[f'cube_{key}']     = - ind_QU[mask_QU_min]
-            I_QU_frames[f'cube_I_{key}'] = ind_I[mask_QU_min]
 
-        # Calculate the individual parameters
-        if mask_QU_plus.any():
+            # Calculate the individual parameters
             QU_frames[f'cube_{key}+']     = ind_QU[mask_QU_plus]
             I_QU_frames[f'cube_I_{key}+'] = ind_I[mask_QU_plus]
-        if mask_QU_min.any():
+
+            QU_frames[f'cube_{key}-']     = ind_QU[mask_QU_min]
+            I_QU_frames[f'cube_I_{key}-'] = ind_I[mask_QU_min]
+
+        elif mask_QU_plus.any() or mask_QU_min.any():
+            QU_frames[f'cube_{key}'] = ind_QU[mask_QU] * \
+                                       (-1*mask_QU_min[mask_QU][:,None,None] + \
+                                       1*mask_QU_plus[mask_QU][:,None,None])
+            I_QU_frames[f'cube_I_{key}'] = ind_I[mask_QU]
+
+        # Calculate the individual parameters
+        if mask_QU_plus.any() and mask_QU_min.any():
+            QU_frames[f'cube_{key}+']     = ind_QU[mask_QU_plus]
+            I_QU_frames[f'cube_I_{key}+'] = ind_I[mask_QU_plus]
+
             QU_frames[f'cube_{key}-']     = ind_QU[mask_QU_min]
             I_QU_frames[f'cube_I_{key}-'] = ind_I[mask_QU_min]
 
@@ -3306,6 +3318,19 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
             = np.nanmedian(I_QU_frames[f'cube_I_{key}'], axis=0)
 
         # Calculate the individual parameters
+        if mask_QU_plus.any() and mask_QU_min.any():
+            QU_frames[f'median_{key}+'] \
+            = np.nanmedian(QU_frames[f'cube_{key}+'], axis=0)
+            I_QU_frames[f'median_I_{key}+'] \
+            = np.nanmedian(I_QU_frames[f'cube_I_{key}+'], axis=0)
+
+            QU_frames[f'median_{key}-'] \
+            = np.nanmedian(QU_frames[f'cube_{key}-'], axis=0)
+            I_QU_frames[f'median_I_{key}-'] \
+            = np.nanmedian(I_QU_frames[f'cube_I_{key}-'], axis=0)
+
+        """
+        # Calculate the individual parameters
         if mask_QU_plus.any():
             QU_frames[f'median_{key}+'] \
             = np.nanmedian(QU_frames[f'cube_{key}+'], axis=0)
@@ -3316,6 +3341,7 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
             = np.nanmedian(QU_frames[f'cube_{key}-'], axis=0)
             I_QU_frames[f'median_I_{key}-'] \
             = np.nanmedian(I_QU_frames[f'cube_I_{key}-'], axis=0)
+        """
 
         return QU_frames, I_QU_frames
 
@@ -3677,7 +3703,7 @@ def write_header_coordinates(file, header, object_name, mask_beams):
     header['CD2_2'] = new_CD[1,1]
 
     # Query the SIMBAD archive to retrieve object coordinates
-    query_result = Simbad.query_object(object_name, wildcard=True)
+    query_result = Simbad.query_object(object_name)
     # Convert the icrs coordinates to fk5
     coord_icrs = SkyCoord(ra=query_result['RA'], dec=query_result['DEC'],
                           frame='icrs', unit=(u.hourangle, u.deg))
@@ -3688,9 +3714,8 @@ def write_header_coordinates(file, header, object_name, mask_beams):
     header['CRVAL2'] = coord_fk5.dec.degree[0]
 
     # Reference pixel, first pixel has index 1
-    im_shape = mask_beams.shape
-    header['CRPIX1'] = im_shape[1]/2 + 1/2
-    header['CRPIX2'] = im_shape[0]/2 + 1/2
+    header['CRPIX1'] = mask_beams.shape[1]/2 - 1/2*(mask_beams.shape[1]%2) + 1
+    header['CRPIX2'] = mask_beams.shape[0]/2 - 1/2*(mask_beams.shape[0]%2) + 1
 
     # Fill in RA, DEC
     header['RA']  = coord_fk5.ra.degree[0]
@@ -3890,7 +3915,7 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
     hdu_list = fits.HDUList(hdu)
 
     for i, key in enumerate(frames.keys()):
-        if key in keys_to_read:
+        if (key in keys_to_read) and (frames[key] is not None):
 
             # Move the pixel-axis to the first axis
             im_to_save = frames[key]
@@ -3908,11 +3933,13 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
             # Remove axes of length 1
             new_im_to_save = np.squeeze(new_im_to_save)
 
+            """
             if HWP_used:
                 # Rotate the image
                 new_im_to_save = rotate_cube(new_im_to_save,
                                              pos_angle, pad=False,
                                              rotate_axes=(0,1))
+            """
 
             # Swap axes for saving to a FITS file
             if new_im_to_save.ndim == 3:
@@ -4031,11 +4058,12 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     pos_angles = np.array([-(fits.getval(x, 'ESO ADA POSANG'))
                            for x in path_beams_files_selected])
 
-    if not HWP_used:
-
-        # Rotate the frames if HWP was not used
-        for i, pos_angle_i in enumerate(pos_angles):
-            beams[i] = rotate_cube(beams[i], pos_angle_i, pad=True)
+    """
+    if (not HWP_used):
+    """
+    # De-rotate the frames if HWP was not used
+    for i, pos_angle_i in enumerate(pos_angles):
+        beams[i] = rotate_cube(beams[i], pos_angle_i, pad=True)
 
     beams = np.array(beams)
 
@@ -4064,10 +4092,14 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     r_deprojected = r_deprojected[mask_beams].flatten()
 
     # Create a header
+    hdu = write_header(object_name, mask_beams)
+    """
+    # Create a header
     mask_beams_rotated = rotate_cube(mask_beams, pos_angles[0],
                                      pad=False, rotate_axes=(0,1))
     hdu = write_header(object_name, mask_beams_rotated)
     del mask_beams_rotated
+    """
 
     # Re-scaling the ordinary and extra-ordinary beam fluxes
     if Wollaston_used:
@@ -4171,20 +4203,25 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
         save_PDI_frames('U_phi', U_phi_frames, mask_beams, HWP_used,
                         pos_angles[0], hdu, path_PDI)
 
+    print_and_log('--- Saving the final data products')
+
     # Save the data frames
     for sign in ['', '+', '-']:
-        save_PDI_frames(f'Q{sign}', Q_frames, mask_beams, HWP_used,
-                        pos_angles[0], hdu, path_PDI)
-        save_PDI_frames(f'I_Q{sign}', I_Q_frames, mask_beams, HWP_used,
-                        pos_angles[0], hdu, path_PDI)
+        if (Q_frames[f'cube_Q{sign}'] is not None):
+            save_PDI_frames(f'Q{sign}', Q_frames, mask_beams, HWP_used,
+                            pos_angles[0], hdu, path_PDI)
+            save_PDI_frames(f'I_Q{sign}', I_Q_frames, mask_beams, HWP_used,
+                            pos_angles[0], hdu, path_PDI)
 
-        save_PDI_frames(f'U{sign}', U_frames, mask_beams, HWP_used,
-                        pos_angles[0], hdu, path_PDI)
-        save_PDI_frames(f'I_U{sign}', I_U_frames, mask_beams, HWP_used,
-                        pos_angles[0], hdu, path_PDI)
+        if (U_frames[f'cube_U{sign}'] is not None):
+            save_PDI_frames(f'U{sign}', U_frames, mask_beams, HWP_used,
+                            pos_angles[0], hdu, path_PDI)
+            save_PDI_frames(f'I_U{sign}', I_U_frames, mask_beams, HWP_used,
+                            pos_angles[0], hdu, path_PDI)
 
-    save_PDI_frames('I', I_frames, mask_beams, HWP_used,
-                    pos_angles[0], hdu, path_PDI)
+    if (Q_frames['cube_Q'] is not None) and (U_frames['cube_U'] is not None):
+        save_PDI_frames('I', I_frames, mask_beams, HWP_used,
+                        pos_angles[0], hdu, path_PDI)
 
     """
     PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
