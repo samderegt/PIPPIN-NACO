@@ -257,11 +257,12 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             yp, xp = np.mgrid[0:SCIENCE_i.shape[0], 0:SCIENCE_i.shape[1]]
 
             vmin, vmax = np.nanmedian(SCIENCE_i), np.nanmax(SCIENCE_i)
-            if vmin >= vmax:
+            if (vmin >= vmax):
                 vmin = 0.1*vmax
             #print(vmin, vmax)
             ax[0].imshow(SCIENCE_i, cmap=cmap, aspect='equal',
-                         norm=LogNorm(vmin=vmin, vmax=vmax))
+                         interpolation='none',
+                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
 
             # Plot the calibrated SCIENCE image
             file_i = path_reduced_files_selected[i]
@@ -272,12 +273,13 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
 
 
             vmin, vmax = np.nanmedian(reduced_i), np.nanmax(reduced_i)
-            if vmin >= vmax:
+            if (vmin >= vmax):
                 vmin = 0.1*vmax
             #print(vmin, vmax)
             ax[1].imshow(reduced_i, cmap=cmap, aspect='equal',
+                         interpolation='none',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=LogNorm(vmin=vmin, vmax=vmax))
+                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
 
         if plot_skysub:
             # Plot the sky-subtracted image
@@ -293,8 +295,9 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
                 vmin = 0.1*vmax
             #print(vmin, vmax)
             ax[2].imshow(skysub_i_pos, cmap=cmap, aspect='equal',
+                         interpolation='none',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=LogNorm(vmin=vmin, vmax=vmax))
+                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
 
             skysub_i_neg = np.ma.masked_array(skysub_i, mask=~(skysub_i < 0))
             vmin, vmax = np.nanmedian(-skysub_i_neg), np.nanmax(-skysub_i_neg)
@@ -302,8 +305,9 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
                 vmin = 0.1*vmax
             #print(vmin, vmax)
             ax[2].imshow(-skysub_i_neg, cmap=cmap_skysub, aspect='equal',
+                         interpolation='none',
                          extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=LogNorm(vmin=vmin, vmax=vmax))
+                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
 
             # Plot the ord./ext. beams
             file_i = path_beams_files_selected[i]
@@ -317,11 +321,14 @@ def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
             if np.isnan(vmin) or np.isnan(vmax):
                 vmin, vmax = 0, 1
             ax[3].imshow(beams_i[0], cmap=cmap, aspect='equal',
-                         norm=LogNorm(vmin=vmin, vmax=vmax))
+                         interpolation='none',
+                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
 
             if beams_i.shape[0] != 1:
                 ax[4].imshow(beams_i[1], cmap=cmap, aspect='equal',
-                             norm=LogNorm(vmin=vmin, vmax=vmax))
+                             interpolation='none',
+                             norm=SymLogNorm(linthresh=1e-16,
+                                             vmin=vmin, vmax=vmax))
 
         if beam_centers is not None:
             ord_beam_center_i = np.median(beam_centers[i][:,0,:], axis=0)
@@ -739,7 +746,7 @@ def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
         Moffat_y_offset = Wollaston_beam_separation(camera_used)
 
         # Apply a long, horizontal filter to approximate polarimetric mask
-        box = np.ones((1,20))
+        box = np.ones((1,50))
         mask_approx = ndimage.median_filter(im, footprint=box, mode='constant')
 
         # Apply the minimum filter
@@ -761,6 +768,20 @@ def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
         x0_1, x0_2 = x0_center, x0_center
         y0_1 = y0_center + Moffat_y_offset/2
         y0_2 = y0_center - Moffat_y_offset/2
+
+        extent = (xp.min()-0.5, xp.max()-0.5, yp.max()-0.5, yp.min()-0.5)
+        fig, ax = plt.subplots(figsize=(15,5), ncols=3, sharex=True,
+                               sharey=True)
+        ax[0].imshow(im, aspect='auto', interpolation='none', extent=extent)
+        ax[1].imshow(im-mask_approx, aspect='auto', interpolation='none',
+                     extent=extent)
+        ax[2].imshow(filtered_im, aspect='auto', interpolation='none',
+                     extent=extent)
+
+        for ax_i in ax:
+            ax_i.scatter([x0_1, x0_2], [y0_1, y0_2], marker='o',
+                         facecolor='none', edgecolor='r', s=50)
+        plt.show()
 
     else:
         # Estimate one beam location with a filtered image
@@ -1062,15 +1083,15 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
     Moffat_y_offset = Wollaston_beam_separation(camera_used, filter_used)
 
     # Functions to constrain the model
-    def tie_to_x_0_0(model):
-        return model.x_0_0
-    def tie_to_y_0_0_offset(model):
-        return model.y_0_0 + Moffat_y_offset
+    def tie_to_x_0_1(model):
+        return model.x_0_1
+    def tie_to_y_0_1_offset(model):
+        return model.y_0_1 + Moffat_y_offset
 
-    def tie_to_amp_0(model):
-        return model.amplitude_0
-    def tie_to_gamma_0(model):
-        return model.gamma_0
+    def tie_to_amp_1(model):
+        return model.amplitude_1
+    def tie_to_gamma_1(model):
+        return model.gamma_1
 
     # Crop the image to fit -------------------------------
     x_min = max([xp.min(), x0_ord-40])
@@ -1106,32 +1127,16 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
                                                 'y_0':(y_min_0, y_max_0),
                                                 'amplitude':(1,40000),
                                                 'gamma':(0.1,30),
-                                                'alpha':(0,10)}
+                                                'alpha':(0,10)},
+                                        fixed={'alpha':True, 'gamma':True},
                                        )
-    """
-    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext,
-                                        amplitude=20000, gamma=5,
-                                        bounds={'x_0':(x_min, x_max),
-                                                'y_0':(y_min_0, y_max_0)},
-                                        fixed={'alpha':True, 'gamma':True}
-                                       )
-    """
+
     # Ordinary beam
     if tied_offset:
         # Tie the x and y coordinates, amplitudes, and gamma
-        tied_1 = {'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0_offset,
-                  'amplitude':tie_to_amp_0, 'gamma':tie_to_gamma_0}
-        """
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
-                                            y_0=y0_ext+Moffat_y_offset,
-                                            amplitude=20000, gamma=5,
-                                            bounds={'x_0':(x_min, x_max),
-                                                    'y_0':(y_min_1, y_max_1)},
-                                            tied=tied_1,
-                                            fixed={'alpha':True,
-                                                   'gamma':True}
-                                           )
-        """
+        tied_1 = {'x_0':tie_to_x_0_1, 'y_0':tie_to_y_0_1_offset,
+                  }#'amplitude':tie_to_amp_0, 'gamma':tie_to_gamma_0}
+
         single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
                                             y_0=y0_ext+Moffat_y_offset,
                                             amplitude=15000, gamma=3, alpha=1,
@@ -1140,18 +1145,10 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
                                                     'amplitude':(1,40000),
                                                     'gamma':(0.1,30),
                                                     'alpha':(0,10)},
+                                            fixed={'alpha':True, 'gamma':True},
                                             tied=tied_1
                                            )
     else:
-        """
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
-                                            y_0=y0_ext+Moffat_y_offset,
-                                            amplitude=20000, gamma=5,
-                                            bounds={'x_0':(x_min, x_max),
-                                                    'y_0':(y_min_1, y_max_1)},
-                                            fixed={'alpha':True, 'gamma':True}
-                                           )
-        """
         single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
                                             y_0=y0_ext+Moffat_y_offset,
                                             amplitude=15000, gamma=3, alpha=1,
@@ -1160,6 +1157,7 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
                                                     'amplitude':(1,40000),
                                                     'gamma':(0.1,30),
                                                     'alpha':(0,10)},
+                                            fixed={'alpha':True, 'gamma':True},
                                            )
 
     # Combine the two beams into a single model
@@ -1169,8 +1167,7 @@ def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
 
     # Fit the model to the image
     LevMar_fitter = fitting.LevMarLSQFitter()
-    fitted = LevMar_fitter(complete_model, xp, yp, im,
-                           maxiter=10000, acc=1e-12)
+    fitted = LevMar_fitter(complete_model, xp, yp, im, maxiter=10000, acc=1e-12)
 
     # x- and y-coordinates of the beam centers
     if np.isnan(x0_ext) and np.isnan(y0_ext):
@@ -1250,6 +1247,9 @@ def fit_beam_centers_Moffat(method, Wollaston_used, Wollaston_45,
         # Fit each frame in the cube
         Moffat_PSF.append(np.ones((len(cube),2,2))*np.nan)
         for j, im in enumerate(cube):
+
+            # Apply a median filter
+            im = ndimage.median_filter(im, size=(3,3))
 
             # Fit the (extra)-ordinary beams
             if method=='double-Moffat':
