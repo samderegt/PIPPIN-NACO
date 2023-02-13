@@ -65,6 +65,7 @@ def r_phi(im, xc, yc):
 
     r   = np.sqrt((yp-yc)**2 + (xp-xc)**2)
     phi = np.arctan2((yp-yc), (xc-xp))
+    #phi = np.arctan((yp-yc)/(xc-xp))
 
     return r, phi
 
@@ -2107,7 +2108,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         # Read the files with the same configuration
         mask_i = np.prod((DARK_configs == DARK_config_i),
-                         axis=1, dtype=np.bool)
+                         axis=1, dtype=bool)
         DARKs_i = []
         for path_DARK_file_j in path_DARK_files[mask_i]:
 
@@ -2148,7 +2149,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         # Read the files with the same configuration
         FLAT_mask_i = np.prod((FLAT_configs == FLAT_config_i),
-                              axis=1, dtype=np.bool)
+                              axis=1, dtype=bool)
         FLATs_i = []
         for path_FLAT_file_j in path_FLAT_files[FLAT_mask_i]:
 
@@ -2239,12 +2240,14 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
                      master_FLATs_lamp_on[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
 
+        '''
         ############
         path_FLAT_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT', f'master_FLAT_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_FLAT_file_i,
                      master_FLATs_lamp_on[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
         ############
+        '''
 
         # Save the BPM
         path_BPM_file_i = f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits'
@@ -2252,11 +2255,13 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
         fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
 
+        '''
         ############
         path_BPM_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM', f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
         ############
+        '''
 
     for i in range(len(master_DARKs)):
 
@@ -2269,11 +2274,13 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
                      header=master_DARKs_header[i], output_verify='silentfix',
                      overwrite=True)
 
+        '''
         ############
         path_DARK_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK', f'master_DARK_{camera_i}_NACO.{master_DARKs_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_DARK_file_i, master_DARKs[i].astype(np.float32),
                      header=master_DARKs_header[i], output_verify='silentfix', overwrite=True)
         ############
+        '''
 
     return path_master_FLAT_dir, path_master_BPM_dir, path_master_DARK_dir
 
@@ -3002,11 +3009,11 @@ def remove_open_AO_loop(path_beams_files, HWP_cycle_number, StokesPara):
     if len(open_loop_files) != 0:
 
         mask_to_remove = (path_beams_files[None,:]==open_loop_files[:,None])
-        mask_to_remove = mask_to_remove.sum(axis=0, dtype=np.bool)
+        mask_to_remove = mask_to_remove.sum(axis=0, dtype=bool)
 
         cycles_to_remove = HWP_cycle_number[mask_to_remove]
         mask_to_remove   = (HWP_cycle_number[None,:]==cycles_to_remove[:,None])
-        mask_to_remove   = mask_to_remove.sum(axis=0, dtype=np.bool)
+        mask_to_remove   = mask_to_remove.sum(axis=0, dtype=bool)
 
         if np.any(mask_to_remove):
             print_and_log(f'    Removed {mask_to_remove.sum()} files:')
@@ -3528,7 +3535,7 @@ def final_Stokes_frames(median_Q, median_U, r_deprojected, phi, theta=None):
     if theta is not None:
         # Add offset angles to the phi array
         phi = phi + np.deg2rad(theta[None,:])
-
+    
     # Azimuthal Stokes parameters
     Q_phi = - median_Q*np.cos(2*phi) - median_U*np.sin(2*phi)
     U_phi = + median_Q*np.sin(2*phi) - median_U*np.cos(2*phi)
@@ -3933,13 +3940,11 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
             # Remove axes of length 1
             new_im_to_save = np.squeeze(new_im_to_save)
 
-            """
             if HWP_used:
                 # Rotate the image
                 new_im_to_save = rotate_cube(new_im_to_save,
                                              pos_angle, pad=False,
                                              rotate_axes=(0,1))
-            """
 
             # Swap axes for saving to a FITS file
             if new_im_to_save.ndim == 3:
@@ -4058,12 +4063,10 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     pos_angles = np.array([-(fits.getval(x, 'ESO ADA POSANG'))
                            for x in path_beams_files_selected])
 
-    """
     if (not HWP_used):
-    """
-    # De-rotate the frames if HWP was not used
-    for i, pos_angle_i in enumerate(pos_angles):
-        beams[i] = rotate_cube(beams[i], pos_angle_i, pad=True)
+        # De-rotate the frames if HWP was not used
+        for i, pos_angle_i in enumerate(pos_angles):
+            beams[i] = rotate_cube(beams[i], pos_angle_i, pad=True)
 
     beams = np.array(beams)
 
@@ -4222,63 +4225,6 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     if (Q_frames['cube_Q'] is not None) and (U_frames['cube_U'] is not None):
         save_PDI_frames('I', I_frames, mask_beams, HWP_used,
                         pos_angles[0], hdu, path_PDI)
-
-    """
-    PDI_frames = double_difference(ind_I, ind_QU, mask_beams, StokesPara,
-                                   crosstalk_correction, r, r_crosstalk,
-                                   Wollaston_used, path_PDI)
-    del ind_I, ind_QU
-
-    if (PDI_frames['cube_Q'] is not None) and \
-       (PDI_frames['cube_U'] is not None):
-
-        # Instrumental polarisation correction
-        print_and_log('--- IP-subtraction (IPS) using annuli with unpolarised stellar signal')
-        PDI_frames['median_Q_IPS'], \
-        PDI_frames['median_U_IPS'] \
-        = IPS(r, spm, r_inner_IPS, r_outer_IPS,
-              Q=load_PDI_frames(PDI_frames, 'cube_Q'),
-              U=load_PDI_frames(PDI_frames, 'cube_U'),
-              I_Q=load_PDI_frames(PDI_frames, 'cube_I_Q'),
-              I_U=load_PDI_frames(PDI_frames, 'cube_I_U'),
-              I=load_PDI_frames(PDI_frames, 'cube_I'))
-
-        # Retrieve the de-projected radius
-        yp, xp = np.mgrid[0:mask_beams.shape[0], 0:mask_beams.shape[1]]
-        r_deprojected = deprojected_radius(xp, yp,
-                                           (mask_beams.shape[0]-1)/2,
-                                           (mask_beams.shape[1]-1)/2,
-                                           disk_pos_angle,
-                                           disk_inclination)
-        r_deprojected = r_deprojected.astype(np.float32)
-        r_deprojected = r_deprojected[mask_beams].flatten()
-
-        # Final Stokes frames
-        PDI_frames, phi = final_Stokes_frames(r_deprojected, phi,
-                                              PDI_frames, minimise_U_phi,
-                                              r_crosstalk)
-
-        # r^2-scaled Stokes parameters
-        PDI_frames['P_I_r2']   = PDI_frames['P_I'] * r_deprojected**2
-        PDI_frames['Q_phi_r2'] = PDI_frames['Q_phi'] * r_deprojected**2
-        PDI_frames['U_phi_r2'] = PDI_frames['U_phi'] * r_deprojected**2
-
-        if not HWP_used and Wollaston_used:
-            # r^2-scaled extended PI image
-            PDI_frames = extended_Stokes_frames(r, spm, r_inner_IPS,
-                                                r_outer_IPS, PDI_frames)
-            PDI_frames['P_I_extended_r2'] = PDI_frames['P_I_extended'] * \
-                                            r_deprojected**2
-
-        del r_deprojected, xp, yp
-
-    del r, phi, spm
-
-    # Save the data products
-    save_PDI_frames(path_PDI, PDI_frames, object_name,
-                    mask_beams, HWP_used, pos_angles[0])
-
-    """
 
 def run_pipeline(path_SCIENCE_dir,
                  path_master_FLAT_dir='../data/master_FLAT/',
