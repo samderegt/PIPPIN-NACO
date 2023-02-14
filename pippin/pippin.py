@@ -1750,15 +1750,15 @@ def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
         # Subtract the next dithering position from the original
         cube -= np.nanmedian(cube_next_offset, axis=0, keepdims=True)
 
-        """
+        #"""
         # Remove any leftover background signal with linear fits
         for j in range(len(cube)):
             y_j = beam_centers[i][j,:,1]
-            cube[j] -= sky_background_fit(cube[j], offsets[i],
-                                          offsets[idx_next_offset],
+            cube[j] -= sky_background_fit(cube[j], offsets[i,0],
+                                          offsets[idx_next_offset,0],
                                           min_offset, y_j,
                                           remove_horizontal_stripes)
-        """
+        #"""
         # Add filename
         file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
         path_skysub_files_selected.append(file_skysub)
@@ -4531,3 +4531,60 @@ def run_example(path_cwd):
                      path_master_DARK_dir=path_master_DARK_dir,
                      new_log_file=False
                      )
+
+def download_data(path_cwd):
+
+    import urllib, os
+
+    path_request_file = list(path_cwd.glob('*.txt'))[0]
+    request_file = open(path_request_file)
+    
+    content = request_file.readlines()
+
+    FLATs, DARKs, SCIENCEs = [], [], []
+    for file_name_i, file_i in zip(content[21::2], content[22::2]):
+        
+        file_name_i = file_name_i.replace(' \n', '')
+
+        if 'CAL_FLAT_LAMP' in file_i:
+            FLATs.append(file_name_i)
+        elif 'CAL_DARK' in file_i:
+            DARKs.append(file_name_i)
+        elif 'Raw data for which no processed data is available' in file_i:
+            SCIENCEs.append(file_name_i)
+    
+    all_files = np.concatenate((FLATs, DARKs, SCIENCEs))
+
+    # Create FLAT and DARK directories
+    path_FLAT_dir = Path(path_cwd, 'FLATs')
+    path_DARK_dir = Path(path_cwd, 'DARKs')
+
+    if not path_FLAT_dir.is_dir():
+        path_FLAT_dir.mkdir()
+    if not path_DARK_dir.is_dir():
+        path_DARK_dir.mkdir()
+
+    # Download the data
+    url = 'https://dataportal.eso.org/dataportal_new/file/{}'
+    for file_name_i in tqdm(all_files, bar_format=pbar_format):
+
+        target_dir = path_cwd
+        if file_name_i in FLATs:
+            target_dir = path_FLAT_dir
+        elif file_name_i in DARKs:
+            target_dir = path_DARK_dir
+
+        target_file_name_i = Path(target_dir, f'{file_name_i}.fits.Z')
+
+        # Ignore any files that were already downloaded
+        if target_file_name_i.is_file():
+            continue
+        if Path(target_dir, f'{file_name_i}.fits').is_file():
+            continue
+
+        # Download the requested file
+        urllib.request.urlretrieve(url.format(file_name_i), target_file_name_i)
+    
+    # Extract the files
+    os.system('gunzip *fits.Z')
+    os.system('gunzip */*fits.Z')

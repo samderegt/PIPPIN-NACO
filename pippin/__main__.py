@@ -3,6 +3,7 @@ import argparse, configparser
 from .pippin import run_pipeline
 from .pippin import prepare_calib_files
 from .pippin import run_example
+from .pippin import download_data
 
 from pathlib import Path
 import warnings
@@ -19,6 +20,8 @@ def main(args=None):
 
     # All arguments to expect
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('--download_data', action='store_true')
 
     parser.add_argument('--run_example', action='store_true')
 
@@ -38,6 +41,9 @@ def main(args=None):
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
+
+        if args.download_data:
+            download_data(path_cwd=path_cwd)
 
         if args.run_example:
             # Run the example reduction
