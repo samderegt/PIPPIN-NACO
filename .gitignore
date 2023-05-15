@@ -6,3 +6,4 @@ pippin/example_HD_135344B/FLATs/master_FLAT/
 pippin/example_HD_135344B/master_BPMs/
 pippin/example_HD_135344B/pipeline_output/
 pippin/__pycache__/
+dist/*.egg

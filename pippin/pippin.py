@@ -1844,7 +1844,7 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
         I_frames['cube_I']   = 1/2*(I_Q_frames['cube_I_Q'] + \
                                     I_U_frames['cube_I_U'])
         I_frames['median_I'] = np.nanmedian(I_frames['cube_I'], axis=0,
-                                            keepdims=True)
+                                            keepdims=False)
 
     return Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames
 
@@ -2404,7 +2404,7 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
 
             # Move the pixel-axis to the first axis
             im_to_save = frames[key]
-            if im_to_save.ndim == 3:
+            if (im_to_save.ndim == 3) or key.startswith('cube_'):
                 im_to_save = np.moveaxis(im_to_save, 0, -1)
 
             # Reshape the array to form an image
@@ -2548,7 +2548,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
 
     beams = np.array(beams)
 
-    xc, yc = (beams.shape[3]-1)/2, (beams.shape[2]-1)/2
+    xc, yc = (beams.shape[-1]-1)/2, (beams.shape[-2]-1)/2
     r, phi = af.r_phi(beams[0,0], xc, yc)
     r, phi = r.astype(np.float32), phi.astype(np.float32)
 
@@ -2565,8 +2565,8 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     # Retrieve the de-projected radius
     yp, xp = np.mgrid[0:mask_beams.shape[0], 0:mask_beams.shape[1]]
     r_deprojected = deprojected_radius(xp, yp,
-                                       (mask_beams.shape[0]-1)/2,
-                                       (mask_beams.shape[1]-1)/2,
+                                       (mask_beams.shape[-1]-1)/2,
+                                       (mask_beams.shape[-2]-1)/2,
                                        disk_pos_angle,
                                        disk_inclination)
     r_deprojected = r_deprojected.astype(np.float32)
@@ -3024,7 +3024,7 @@ def download_data(path_cwd):
         
         file_name_i = file_name_i.replace(' \n', '')
 
-        if 'CAL_FLAT_LAMP' in file_i:
+        if ('CAL_FLAT_LAMP' in file_i) or ('CAL_FLAT_POL' in file_i):
             FLATs.append(file_name_i)
         elif 'CAL_DARK' in file_i:
             DARKs.append(file_name_i)
