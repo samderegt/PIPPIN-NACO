@@ -33,464 +33,17 @@ import datetime
 import warnings
 import sys
 
-################################################################################
-# Auxiliary functions
-################################################################################
+import pippin.auxiliary_functions as af
+import pippin.figures as figs
+import pippin.beam_fitting as beam
+import pippin.sky_subtraction as sky
 
 # Setting the length of progress bars
 pbar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
 
-def r_phi(im, xc, yc):
-    '''
-    Get a radius- and angle-array around a center.
-
-    Input
-    -----
-    im : 2D-array
-        Array with same size as the output.
-    xc : scalar
-        x-coordinate of the center.
-    yc : scalar
-        y-coordinate of the center.
-
-    Output
-    ------
-    r : 2D-array
-        Radius around (xc, yc).
-    phi: 2D-array
-        Angle around (xc, yc).
-    '''
-
-    yp, xp = np.mgrid[0:im.shape[0], 0:im.shape[1]]
-
-    r   = np.sqrt((yp-yc)**2 + (xp-xc)**2)
-    phi = np.arctan2((yp-yc), (xc-xp))
-    #phi = np.arctan((yp-yc)/(xc-xp))
-
-    return r, phi
-
-def Wollaston_beam_separation(camera, filter=''):
-    '''
-    Get a beam-separation belonging to the utilised camera and filter.
-
-    Input
-    -----
-    camera : str
-        Camera that was used.
-    filter : str
-        Filter that was used.
-
-    Output
-    ------
-    beam_separation : int
-        Number of pixels separating the beams.
-    '''
-
-    # From NACO user manual: Separation in pixels
-    all_offsets = {'S13_H':260, 'S13_Ks':254, 'S13':257,
-                   'S27_H':126, 'S27_Ks':122, 'S27':124,
-                   'S54_H':62, 'S54_Ks':61, 'S54':61.5,
-                   'L27':110, 'L54':55}
-
-    key_camera = camera
-    key_camera_filter = f'{camera}_{filter}'
-
-    if key_camera_filter in all_offsets.keys():
-        # Wavelength-specific separation
-        return all_offsets[key_camera_filter]
-    elif key_camera in all_offsets.keys():
-        # Separation based on utilised camera
-        return all_offsets[key_camera]
-    else:
-        raise KeyError('\nCamera \'{}\' not recognized. Use \'S13\', \'S27\', \'S54\', \'L27\' or \'L54\'.')
-
-def assign_Stokes_parameters(files, HWP_used, Wollaston_used):
-    '''
-    Assign Stokes parameters based on HWP angles or position angles.
-
-    Input
-    -----
-    files : 1D-array
-        Filenames.
-    HWP_used : bool
-        If True, HWP was used, else position angle was changed.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-
-    Output
-    ------
-    StokesPara : 1D-array
-        Stokes parameter-strings ('Q+', 'U+', 'Q-', 'U-')
-    '''
-    pos_angles = np.array([fits.getheader(x)['ESO ADA POSANG']
-                           for x in files])
-
-    def closest_angle(angle_x):
-
-        valid_angles = np.arange(0., 360+22.5, 22.5)
-        corr_angle_x = valid_angles[np.argmin(np.abs(valid_angles - angle_x))]
-
-        if corr_angle_x in [0., 90., 180., 270., 360.]:
-            corr_angle_x = 0.0    # Replace 360 degree with 0 degree
-        if corr_angle_x in [22.5, 112.5, 202.5, 292.5]:
-            corr_angle_x = 22.5
-        if corr_angle_x in [45., 135., 225., 315.]:
-            corr_angle_x = 45.0
-        if corr_angle_x in [67.5, 157.5, 247.5, 337.5]:
-            corr_angle_x = 67.5
-
-        return corr_angle_x
-
-    if HWP_used:
-        # HWP (+ Wollaston)
-
-        HWP_angles = np.zeros(len(files))
-        for i, x in enumerate(files):
-            # Read the HWP encoder
-            HWP_encoder_i = fits.getheader(x)['ESO INS ADC1 ENC']
-
-            # According to the NACO manual
-            HWP_angle_i = ((HWP_encoder_i + 205) / (4096/360)) % 360
-
-            # Closest valid HWP angle
-            HWP_angles[i] = closest_angle(HWP_angle_i)
-
-        # Assign Stokes parameters based on HWP angles
-        StokesPara = np.array(['Unassigned']*len(files))
-        StokesPara[HWP_angles==0.00] = 'Q+'
-        StokesPara[HWP_angles==22.5] = 'U+'
-        StokesPara[HWP_angles==45.0] = 'Q-'
-        StokesPara[HWP_angles==67.5] = 'U-'
-
-    elif not HWP_used and Wollaston_used:
-        # Rotator + Wollaston
-
-        pos_angles = np.array([fits.getheader(x)['ESO ADA POSANG']
-                               for x in files])
-
-        # Subtract smallest position angle
-        pos_angles -= pos_angles.min()
-
-        # Closest valid HWP angle
-        pos_angles = np.mod(pos_angles, 180)
-
-        Qplus_mask = np.ma.mask_or((pos_angles==0.0), (pos_angles==180.0))
-        Umin_mask  = np.ma.mask_or((pos_angles==45.0), (pos_angles==-135.0))
-        Qmin_mask  = np.ma.mask_or((pos_angles==90.0), (pos_angles==-90.0))
-        Uplus_mask = np.ma.mask_or((pos_angles==-45.0), (pos_angles==135.0))
-
-        # Assign Stokes parameters based on position angles
-        StokesPara = np.array(['Unassigned']*len(files))
-        StokesPara[Qplus_mask] = 'Q+'
-        StokesPara[Umin_mask]  = 'U-'
-        StokesPara[Qmin_mask]  = 'Q-'
-        StokesPara[Uplus_mask] = 'U+'
-
-    elif not HWP_used and not Wollaston_used:
-        # Wiregrid
-
-        wiregrids = []
-        for i, x in enumerate(files):
-            wiregrid_i = fits.getheader(x)['ESO INS OPTI4 ID']
-            wiregrids.append(wiregrid_i)
-        wiregrids = np.array(wiregrids)
-
-        Qplus_mask = (wiregrids == 'Pol_00')
-        Umin_mask  = (wiregrids == 'Pol_45')
-        Qmin_mask  = (wiregrids == 'Pol_90')
-        Uplus_mask = (wiregrids == 'Pol_135')
-
-        # Assign Stokes parameters based on position angles
-        StokesPara = np.array(['Unassigned']*len(files))
-        StokesPara[Qplus_mask] = 'Q+'
-        StokesPara[Umin_mask]  = 'U-'
-        StokesPara[Qmin_mask]  = 'Q-'
-        StokesPara[Uplus_mask] = 'U+'
-
-    return StokesPara
-
-################################################################################
-# Make figures
-################################################################################
-
-def plot_reduction(plot_reduced=False, plot_skysub=False, beam_centers=None,
-                   size_to_crop=None, Wollaston_45=False):
-
-    # path_SCIENCE_files_selected, path_reduced_files_selected,
-    # path_skysub_files_selected, path_beams_files_selected
-
-    if (beam_centers is not None) and np.isnan(beam_centers[0][:,1]).all():
-        width_ratios, nrows = [1,1,1,1], 1
-    else:
-        width_ratios, nrows = [1,1,1,0.5], 2
-
-    cmap = mpl.colors.LinearSegmentedColormap.from_list('', ['k','C0','w'])
-    cmap_skysub = mpl.colors.LinearSegmentedColormap.from_list('', ['k','C1','w'])
-
-    for i in tqdm(range(len(path_SCIENCE_files_selected)), \
-                  bar_format=pbar_format):
-
-        fig = plt.figure(figsize=(12,4))
-        gs = fig.add_gridspec(ncols=4, nrows=nrows, wspace=0.05, hspace=0.05,
-                              width_ratios=width_ratios, left=0.02, right=0.98,
-                              bottom=0.02, top=0.98)
-
-        # Create the axes objects
-        if nrows == 1:
-            ax = [fig.add_subplot(gs[0]), fig.add_subplot(gs[1]),
-                  fig.add_subplot(gs[2]), fig.add_subplot(gs[3])]
-        else:
-            ax = [fig.add_subplot(gs[:,0]), fig.add_subplot(gs[:,1]),
-                  fig.add_subplot(gs[:,2]), fig.add_subplot(gs[0,3]),
-                  fig.add_subplot(gs[1,3])]
-
-        ax[0].set_title('Raw SCIENCE image')
-        ax[1].set_title('Calibrated image')
-        ax[2].set_title('Sky-subtracted image')
-        ax[3].set_title('Ord./Ext. beams')
-
-        if plot_reduced:
-            # Plot the raw SCIENCE image
-            file_i = path_SCIENCE_files_selected[i]
-            SCIENCE_i, _ = read_FITS_as_cube(file_i)
-            SCIENCE_i = np.nanmedian(SCIENCE_i, axis=0) # Median-combine
-
-            yp, xp = np.mgrid[0:SCIENCE_i.shape[0], 0:SCIENCE_i.shape[1]]
-
-            vmin, vmax = np.nanmedian(SCIENCE_i), np.nanmax(SCIENCE_i)
-            if (vmin >= vmax):
-                vmin = 0.1*vmax
-            #print(vmin, vmax)
-            ax[0].imshow(SCIENCE_i, cmap=cmap, aspect='equal',
-                         interpolation='none',
-                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
-
-            # Plot the calibrated SCIENCE image
-            file_i = path_reduced_files_selected[i]
-            reduced_i = fits.getdata(file_i).astype(np.float32)
-            reduced_i = np.nanmedian(reduced_i, axis=0) # Median-combine
-
-            yp, xp = np.mgrid[0:reduced_i.shape[0], 0:reduced_i.shape[1]]
-
-
-            vmin, vmax = np.nanmedian(reduced_i), np.nanmax(reduced_i)
-            if (vmin >= vmax):
-                vmin = 0.1*vmax
-            #print(vmin, vmax)
-            ax[1].imshow(reduced_i, cmap=cmap, aspect='equal',
-                         interpolation='none',
-                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
-
-        if plot_skysub:
-            # Plot the sky-subtracted image
-            file_i = path_skysub_files_selected[i]
-            skysub_i = fits.getdata(file_i).astype(np.float32)
-            skysub_i = np.nanmedian(skysub_i, axis=0) # Median-combine
-
-            yp, xp = np.mgrid[0:skysub_i.shape[0], 0:skysub_i.shape[1]]
-
-            skysub_i_pos = np.ma.masked_array(skysub_i, mask=~(skysub_i > 0))
-            vmin, vmax = np.nanmedian(skysub_i_pos), np.nanmax(skysub_i_pos)
-            if vmin >= vmax:
-                vmin = 0.1*vmax
-            #print(vmin, vmax)
-            ax[2].imshow(skysub_i_pos, cmap=cmap, aspect='equal',
-                         interpolation='none',
-                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
-
-            skysub_i_neg = np.ma.masked_array(skysub_i, mask=~(skysub_i < 0))
-            vmin, vmax = np.nanmedian(-skysub_i_neg), np.nanmax(-skysub_i_neg)
-            if vmin >= vmax:
-                vmin = 0.1*vmax
-            #print(vmin, vmax)
-            ax[2].imshow(-skysub_i_neg, cmap=cmap_skysub, aspect='equal',
-                         interpolation='none',
-                         extent=(xp.min(), xp.max(), yp.max(), yp.min()),
-                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
-
-            # Plot the ord./ext. beams
-            file_i = path_beams_files_selected[i]
-            beams_i = fits.getdata(file_i).astype(np.float32)
-
-            vmin, vmax = np.nanmedian(beams_i), np.nanmax(beams_i)
-            if vmin >= vmax:
-                vmin = 0.1*vmax
-            #print(vmin, vmax)
-            #print()
-            if np.isnan(vmin) or np.isnan(vmax):
-                vmin, vmax = 0, 1
-            ax[3].imshow(beams_i[0], cmap=cmap, aspect='equal',
-                         interpolation='none',
-                         norm=SymLogNorm(linthresh=1e-16, vmin=vmin, vmax=vmax))
-
-            if beams_i.shape[0] != 1:
-                ax[4].imshow(beams_i[1], cmap=cmap, aspect='equal',
-                             interpolation='none',
-                             norm=SymLogNorm(linthresh=1e-16,
-                                             vmin=vmin, vmax=vmax))
-
-        if beam_centers is not None:
-            ord_beam_center_i = np.median(beam_centers[i][:,0,:], axis=0)
-            ext_beam_center_i = np.median(beam_centers[i][:,1,:], axis=0)
-
-            for ax_i in ax[1:3]:
-                ax_i.scatter(ord_beam_center_i[0], ord_beam_center_i[1],
-                             marker='+', color='C3')
-                rect = mpl.patches.Rectangle(xy=(ord_beam_center_i[0]-
-                                                 size_to_crop[1]/2,
-                                                 ord_beam_center_i[1]-
-                                                 size_to_crop[0]/2),
-                                             width=size_to_crop[1],
-                                             height=size_to_crop[0],
-                                             edgecolor='C3',
-                                             facecolor='none')
-                ax_i.add_patch(rect)
-
-                ax_i.scatter(ext_beam_center_i[0], ext_beam_center_i[1],
-                             marker='x', color='C3')
-                rect = mpl.patches.Rectangle(xy=(ext_beam_center_i[0]-
-                                                 size_to_crop[1]/2,
-                                                 ext_beam_center_i[1]-
-                                                 size_to_crop[0]/2),
-                                             width=size_to_crop[1],
-                                             height=size_to_crop[0],
-                                             edgecolor='C3',
-                                             facecolor='none')
-                ax_i.add_patch(rect)
-
-        for ax_i in ax:
-            ax_i.set(xticks=[], yticks=[])
-            ax_i.set_facecolor('w')
-            ax_i.invert_yaxis()
-
-        # Path to figure file. Create directory if it does not exist yet.
-        path_to_fig = Path(path_reduced_files_selected[i].parent, 'plots',
-                           path_reduced_files_selected[i].name.replace('_reduced.fits', '.pdf'))
-        if not path_to_fig.parent.is_dir():
-            Path(path_to_fig.parent).mkdir()
-
-        fig.savefig(path_to_fig)#, dpi=200)
-        plt.close() # Remove from memory
-
-def plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam):
-    '''
-    Plot the maximum beam-intensities and the open AO-loop bounds.
-
-    Input
-    -----
-    max_counts : 2D-array
-        Maximum beam-intensities with shape
-        (observations, ordinary/extra-ordinary beam).
-    bounds_ord_beam : 1D-array
-        Minimum/maximum open AO-loop bounds for ordinary beam.
-    bounds_ext_beam : 1D-array
-        Minimum/maximum open AO-loop bounds for extra-ordinary beam.
-    '''
-
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.hlines(bounds_ord_beam, xmin=0, xmax=len(max_counts)+1,
-              color='r', ls='--')
-    ax.hlines(bounds_ext_beam, xmin=0, xmax=len(max_counts)+1,
-              color='b', ls='--')
-
-    ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,0],
-            c='r', label='Ordinary beam')
-    if max_counts.shape[1] != 1:
-        ax.plot(np.arange(1,len(max_counts)+1,1), max_counts[:,1],
-                c='b', label='Extra-ordinary beam')
-
-    ax.legend(loc='best')
-    ax.set(ylabel='Maximum counts', xlabel='Observation',
-           xlim=(0,len(max_counts)+1), xticks=np.arange(1,len(max_counts)+1,5))
-    fig.tight_layout()
-    #plt.show()
-
-    # Path to figure file. Create directory if it does not exist.
-    path_to_fig = Path(path_reduced_files_selected[0].parent,
-                       'plots', 'max_counts.pdf')
-    if not path_to_fig.parent.is_dir():
-        Path(path_to_fig.parent).mkdir()
-
-    plt.savefig(path_to_fig)
-    plt.close()
-
 ################################################################################
 # Reading and writing files
 ################################################################################
-
-def write_FITS_file(path_to_file, cube, header=None):
-    '''
-    Write a FITS file.
-
-    Input
-    -----
-    path_to_file : str
-        Filename.
-    cube : 3D-array
-    header : astropy header
-    '''
-
-    # Save the cube with a header
-    fits.writeto(path_to_file, cube.astype(np.float32), header,
-                 output_verify='silentfix', overwrite=True)
-
-    return path_to_file
-
-def read_FITS_as_cube(path_to_file):
-    '''
-    Read a FITS file as a cube, reshape if necessary.
-
-    Input
-    -----
-    path_to_file : str
-        Filename.
-
-    Output
-    ------
-    data : 3D-array
-    header : astropy header
-    '''
-
-    # Read the data from the file
-    data, header = fits.getdata(path_to_file, header=True)
-
-    data = data.astype(np.float32)
-
-    if data.ndim == 2:
-        data = np.expand_dims(data, axis=0)
-
-    elif data.ndim==3:
-
-        if len(data) > 1:
-            # Remove the last, mean frame if cube consists multiple frames
-            data = data[:-1]
-
-        if data.shape[1]!=data.shape[2]:
-            # Remove the top 2 rows of pixels
-            data = data[:,:-2]
-
-    return data, header
-
-def read_from_FITS_header(path_to_file, key):
-    '''
-    Read a keyword from a FITS header.
-
-    Input
-    -----
-    path_to_file : str
-        Filename.
-    key : str
-        Keyword to read.
-
-    Output
-    ------
-    val
-        Keyword value.
-    '''
-
-    return fits.getval(path_to_file, key)
 
 def write_config_file(path_config_file):
 
@@ -710,1106 +263,6 @@ def print_and_log(string, new_file=False, pad=None, pad_character='-'):
     print(string)
 
 ################################################################################
-# Re-centering functions
-################################################################################
-
-def fit_initial_guess(im, xp, yp, Wollaston_used, camera_used, filter_used):
-    '''
-    Retrieve an initial guess avoiding bad pixels with a minimum filter.
-
-    Input
-    -----
-    im : 2D-array
-        Image.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    camera_used: str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        filter that was used.
-
-    Output
-    ------
-    (x0_1, y0_1) : tuple
-        Coordinates of one of the beams.
-    (x0_2, y0_2) : tuple
-        Coordinates of one of the beams.
-    '''
-
-    # Crop the image to avoid initial guesses near the edges
-    im = im[:, 20:-20]
-    yp = yp[:, 20:-20]
-    xp = xp[:, 20:-20]
-
-    if Wollaston_used:
-        # Estimate two beam locations with the maxima of a filtered image
-        # Set the separation based on the used camera
-        Moffat_y_offset = Wollaston_beam_separation(camera_used)
-
-        # Apply a long, horizontal filter to approximate polarimetric mask
-        box = np.ones((1,50))
-        mask_approx = ndimage.median_filter(im, footprint=box, mode='constant')
-
-        # Apply the minimum filter
-        box = np.zeros((Moffat_y_offset,3))
-        box[:+3,:] = 1
-        box[-3:,:] = 1
-
-        filtered_im = ndimage.minimum_filter(im - mask_approx,
-                                             footprint=box, mode='constant')
-
-        # x and y values of each pixel
-        y_idx, x_idx = np.unravel_index(np.argmax(
-                                            filtered_im[Moffat_y_offset//2:
-                                            -Moffat_y_offset//2]),
-                                        filtered_im.shape)
-        x0_center = xp[Moffat_y_offset//2:-Moffat_y_offset//2][y_idx, x_idx]
-        y0_center = yp[Moffat_y_offset//2:-Moffat_y_offset//2][y_idx, x_idx]
-
-        x0_1, x0_2 = x0_center, x0_center
-        y0_1 = y0_center + Moffat_y_offset/2
-        y0_2 = y0_center - Moffat_y_offset/2
-
-        extent = (xp.min()-0.5, xp.max()-0.5, yp.max()-0.5, yp.min()-0.5)
-        fig, ax = plt.subplots(figsize=(15,5), ncols=3, sharex=True,
-                               sharey=True)
-        ax[0].imshow(im, aspect='auto', interpolation='none', extent=extent)
-        ax[1].imshow(im-mask_approx, aspect='auto', interpolation='none',
-                     extent=extent)
-        ax[2].imshow(filtered_im, aspect='auto', interpolation='none',
-                     extent=extent)
-
-        for ax_i in ax:
-            ax_i.scatter([x0_1, x0_2], [y0_1, y0_2], marker='o',
-                         facecolor='none', edgecolor='r', s=50)
-        plt.show()
-
-    else:
-        # Estimate one beam location with a filtered image
-        # Apply the minimum filter
-        box = np.ones((5,5))
-        filtered_im = ndimage.median_filter(im, footprint=box, mode='constant')
-
-        # x and y coordinates of one beam
-        y_idx, x_idx = np.unravel_index(np.argmax(filtered_im),
-                                        filtered_im.shape)
-        x0_1, y0_1 = xp[y_idx, x_idx], yp[y_idx, x_idx]
-
-        # Set second beam to NaN-values
-        x0_2, y0_2 = np.nan, np.nan
-
-    return (x0_1, y0_1), (x0_2, y0_2)
-
-def fit_maximum(Wollaston_used, camera_used, filter_used):
-    '''
-    Use pixels with maximum counts as PSF centers.
-
-    Input
-    -----
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    camera_used : str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        Filter that was used.
-
-    Output
-    ------
-    PSF : list of 3D-arrays
-        Coordinates of the PSF centers for each cube. Each cube's
-        3D-array has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    '''
-
-    min_cube = 0
-    #if filter_used in ['L_prime', 'NB_3.74']:
-    if len(path_reduced_files_selected) > 1:
-        for i, file in enumerate(path_reduced_files_selected):
-            cube = fits.getdata(file).astype(np.float32)
-
-            if i == 0:
-                min_cube = np.mean(cube, axis=0, keepdims=True)
-            else:
-                min_cube = np.min(np.array([min_cube[0],
-                                  np.mean(cube, axis=0)]),
-                                  axis=0, keepdims=True)
-
-    PSF = []
-    for i, file in enumerate(tqdm(path_reduced_files_selected, \
-                                  bar_format=pbar_format)):
-
-        # Read the data
-        cube = fits.getdata(file).astype(np.float32)
-
-        # x and y values of each pixel
-        yp, xp = np.mgrid[0:cube.shape[1], 0:cube.shape[2]]
-
-        # Find one of the PSFs from the first frame in the cube
-        (x0_1, y0_1), (x0_2, y0_2) = fit_initial_guess((cube-min_cube)[0],
-                                                       xp, yp, Wollaston_used,
-                                                       camera_used, filter_used)
-
-        # Set the background to 0
-        cube -= min_cube
-        cube -= np.nanmedian(cube, axis=(1,2), keepdims=True)
-
-        PSF.append(np.ones((len(cube),2,2))*np.nan)
-
-        # Fit each frame in the cube
-        for j, im in enumerate(cube):
-
-            box = np.ones((3,3))
-            filtered_im = ndimage.median_filter(im, footprint=box)
-
-            if Wollaston_used:
-                x0, y0 = [x0_1, x0_2], [y0_1, y0_2]
-            else:
-                x0, y0 = [x0_1], [y0_1]
-
-            # Fit the (extra)-ordinary beams
-            for k, x0_k, y0_k in zip(range(len(x0)), x0, y0):
-
-                # Cut around the beam
-                x_min = max([xp.min(), x0_k - 30])
-                x_max = min([xp.max(), x0_k + 30])
-                y_min = max([yp.min(), y0_k - 30])
-                y_max = min([yp.max(), y0_k + 30])
-
-                # Find the indices to retain the 2D array shape
-                x_min_idx = np.argwhere(xp[0,:]>=x_min)[0,0]
-                x_max_idx = np.argwhere(xp[0,:]<=x_max)[-1,0]
-                y_min_idx = np.argwhere(yp[:,0]>=y_min)[0,0]
-                y_max_idx = np.argwhere(yp[:,0]<=y_max)[-1,0]
-
-                filtered_im_k = filtered_im[y_min_idx:y_max_idx,
-                                            x_min_idx:x_max_idx]
-                yp_k = yp[y_min_idx:y_max_idx, x_min_idx:x_max_idx]
-                xp_k = xp[y_min_idx:y_max_idx, x_min_idx:x_max_idx]
-
-                # Indices where maximum exists
-                y_idx, x_idx = np.unravel_index(np.argmax(filtered_im_k),
-                                                filtered_im_k.shape)
-
-                # Record the maximum
-                PSF[-1][j,k,:] = xp_k[y_idx,x_idx], yp_k[y_idx,x_idx]
-
-            # Sort the PSF locations so that ordinary beam comes first
-            idx_argsort = np.argsort(PSF[-1][j,:,1])
-            PSF[-1][j,:,:] = PSF[-1][j,idx_argsort,:]
-
-            """
-            plt.imshow(filtered_im, extent=(xp.min(), xp.max(), yp.max(), yp.min()), norm=LogNorm())
-            plt.scatter(PSF[-1][j,:,0], PSF[-1][j,:,1], c='r')
-            plt.show()
-            """
-
-    return PSF
-
-def fit_double_Moffat(im, xp, yp, x0_ext, y0_ext, camera_used,
-                      filter_used, tied_offset):
-    '''
-    Fit two Moffat functions with the same center to retrieve the PSF center.
-    The flat, saturated top of the PSF is simulated by subtracting a Moffat
-    function from another.
-
-    The ordinary and extra-ordinary beams are fitted simultaneously.
-
-    Input
-    -----
-    im : 2D-array
-        Image.
-    xp, yp : 2D-arrays
-        x-, y-coordinates of pixels.
-    x0_ext, y0_ext : floats
-        Initial guess of extra-ordinary (bottom) beam.
-    camera_used : str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        Filter that was used.
-    tied_offset : bool
-        Use a fixed beam-separation.
-
-    Output
-    ------
-    [[x_ext,y_ext], [x_ord,y_ord]] : array
-        x-, y-coordinate of fitted beam-centers.
-    '''
-
-    # Set the separation based on the used camera
-    Moffat_y_offset = Wollaston_beam_separation(camera_used, filter_used)
-
-    # Functions to constrain the model
-    def tie_to_x_0_0(model):
-        return model.x_0_0
-    def tie_to_y_0_0(model):
-        return model.y_0_0
-
-    def tie_to_y_0_0_offset(model):
-        return model.y_0_0 + Moffat_y_offset
-
-    def tie_to_amp_0(model):
-        return model.amplitude_0
-    def tie_to_gamma_0(model):
-        return model.gamma_0
-    def tie_to_amp_1(model):
-        return model.amplitude_1
-    def tie_to_gamma_1(model):
-        return model.gamma_1
-
-    def tie_to_x_0_2(model):
-        return model.x_0_2
-    def tie_to_y_0_2(model):
-        return model.y_0_2
-
-    # Crop the image to fit -------------------------------
-    x_min = max([xp.min(), x0_ext-40])
-    x_max = min([xp.max(), x0_ext+40])
-    y_min_0 = max([yp.min(), y0_ext-40])
-    y_max_0 = min([yp.max(), y0_ext+40])
-    y_min_2 = max([yp.min(), y0_ext+Moffat_y_offset-40])
-    y_max_2 = min([yp.max(), y0_ext+Moffat_y_offset+40])
-
-    # Mask the arrays
-    mask_xp = (xp >= x_min) & (xp <= x_max)
-    mask_yp = np.ma.mask_or(((yp >= y_min_0) & (yp <= y_max_0)),
-                            ((yp >= y_min_2) & (yp <= y_max_2))
-                            )
-    mask_im = mask_xp & mask_yp
-
-    im = im[mask_im]
-    xp = xp[mask_im]
-    yp = yp[mask_im]
-
-    # Bounds of the Moffat center -------------------------
-    x_min = max([xp.min(), x0_ext-10])
-    x_max = min([xp.max(), x0_ext+10])
-    y_min_0 = max([yp.min(), y0_ext-10])
-    y_max_0 = min([yp.max(), y0_ext+10])
-    y_min_2 = max([yp.min(), y0_ext+Moffat_y_offset-10])
-    y_max_2 = min([yp.max(), y0_ext+Moffat_y_offset+10])
-
-    # Extra-ordinary beam
-    Moffat_0 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=20000, gamma=5,
-                               bounds={'x_0':(x_min, x_max),
-                                       'y_0':(y_min_0, y_max_0)},
-                               fixed={'alpha':True, 'gamma':True}
-                              )
-    Moffat_1 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext, amplitude=1000, gamma=5,
-                               bounds={'x_0':(x_min, x_max),
-                                       'y_0':(y_min_0, y_max_0)},
-                               tied={'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0},
-                               fixed={'alpha':True, 'gamma':True}
-                              )
-    # Double Moffat for the extra-ordinary beam
-    double_Moffat_ext = Moffat_0 - Moffat_1
-
-
-    # Ordinary beam
-    if tied_offset:
-        # Tie the x and y coordinates, amplitudes, and gamma
-        tied_2 = {'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0_offset,
-                  'amplitude':tie_to_amp_0, 'gamma':tie_to_gamma_0}
-        tied_3 = {'x_0':tie_to_x_0_0, 'y_0':tie_to_y_0_0_offset,
-                  'amplitude':tie_to_amp_1, 'gamma':tie_to_gamma_1}
-
-        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
-                                   amplitude=20000, gamma=5,
-                                   bounds={'x_0':(x_min, x_max),
-                                           'y_0':(y_min_2, y_max_2)},
-                                   tied=tied_2,
-                                   fixed={'alpha':True, 'gamma':True}
-                                  )
-    else:
-        Moffat_2 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
-                                   amplitude=20000, gamma=5,
-                                   bounds={'x_0':(x_min, x_max),
-                                           'y_0':(y_min_2, y_max_2)},
-                                   fixed={'alpha':True, 'gamma':True}
-                                  )
-        # Tie the (x,y)-coordinates
-        tied_3 = {'x_0':tie_to_x_0_2, 'y_0':tie_to_y_0_2}
-
-    Moffat_3 = models.Moffat2D(x_0=x0_ext, y_0=y0_ext+Moffat_y_offset,
-                               amplitude=1000, gamma=5,
-                               bounds={'x_0':(x_min, x_max),
-                                       'y_0':(y_min_2, y_max_2)},
-                               tied=tied_3, fixed={'alpha':True, 'gamma':True}
-                              )
-    # Double Moffat for the ordinary beam
-    double_Moffat_ord = Moffat_2 - Moffat_3
-
-
-    # Combine the two beams into a single model
-    complete_model = double_Moffat_ext + double_Moffat_ord
-
-    # Fit the model to the image
-    LevMar_fitter = fitting.LevMarLSQFitter()
-    fitted = LevMar_fitter(complete_model, xp, yp, im, maxiter=10000, acc=1e-12)
-
-    # x- and y-coordinates of the beam centers
-    x_ext, y_ext = fitted[0].parameters[1:3]
-    x_ord, y_ord = fitted[2].parameters[1:3]
-
-    return np.array([[x_ext, y_ext],
-                     [x_ord, y_ord]])
-
-def fit_single_Moffat(im, xp, yp, x0_ord, y0_ord, x0_ext, y0_ext,
-                      camera_used, filter_used, tied_offset):
-    '''
-    Fit a single Moffat function to retrieve a PSF center.
-
-    Input
-    -----
-    im : 2D-array
-        Image.
-    xp, yp : 2D-arrays
-        x-, y-coordinates of pixels.
-    x0_ord, y0_ord : floats
-        Initial guess of ordinary (top) beam.
-    x0_ext, y0_ext : floats
-        Initial guess of extra-ordinary (bottom) beam.
-    camera_used : str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        Filter that was used.
-    tied_offset : bool
-        Use a fixed beam-separation.
-
-    Output
-    ------
-    [[x_ext,y_ext], [x_ord,y_ord]] : array
-        x-, y-coordinate of fitted beam-centers.
-    '''
-
-    # Set the separation based on the used camera
-    Moffat_y_offset = Wollaston_beam_separation(camera_used, filter_used)
-
-    # Functions to constrain the model
-    def tie_to_x_0_1(model):
-        return model.x_0_1
-    def tie_to_y_0_1_offset(model):
-        return model.y_0_1 + Moffat_y_offset
-
-    def tie_to_amp_1(model):
-        return model.amplitude_1
-    def tie_to_gamma_1(model):
-        return model.gamma_1
-
-    # Crop the image to fit -------------------------------
-    x_min = max([xp.min(), x0_ord-40])
-    x_max = min([xp.max(), x0_ord+40])
-    y_min_0 = max([yp.min(), y0_ord-Moffat_y_offset-40])
-    y_max_0 = min([yp.max(), y0_ord-Moffat_y_offset+40])
-    y_min_1 = max([yp.min(), y0_ord-40])
-    y_max_1 = min([yp.max(), y0_ord+40])
-
-    # Mask the arrays
-    mask_xp = (xp >= x_min) & (xp <= x_max)
-    mask_yp = np.ma.mask_or(((yp >= y_min_0) & (yp <= y_max_0)),
-                            ((yp >= y_min_1) & (yp <= y_max_1))
-                            )
-    mask_im = mask_xp & mask_yp
-
-    im = im[mask_im]
-    xp = xp[mask_im]
-    yp = yp[mask_im]
-
-    # Bounds of the Moffat center -------------------------
-    x_min = max([xp.min(), x0_ord-10])
-    x_max = min([xp.max(), x0_ord+10])
-    y_min_0 = max([yp.min(), y0_ord-Moffat_y_offset-10])
-    y_max_0 = min([yp.max(), y0_ord-Moffat_y_offset+10])
-    y_min_1 = max([yp.min(), y0_ord-10])
-    y_max_1 = min([yp.max(), y0_ord+10])
-
-    # Extra-ordinary beam
-    single_Moffat_ext = models.Moffat2D(x_0=x0_ext, y_0=y0_ext,
-                                        amplitude=15000, gamma=3, alpha=1,
-                                        bounds={'x_0':(x_min, x_max),
-                                                'y_0':(y_min_0, y_max_0),
-                                                'amplitude':(1,40000),
-                                                'gamma':(0.1,30),
-                                                'alpha':(0,10)},
-                                        fixed={'alpha':True, 'gamma':True},
-                                       )
-
-    # Ordinary beam
-    if tied_offset:
-        # Tie the x and y coordinates, amplitudes, and gamma
-        tied_1 = {'x_0':tie_to_x_0_1, 'y_0':tie_to_y_0_1_offset,
-                  }#'amplitude':tie_to_amp_0, 'gamma':tie_to_gamma_0}
-
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
-                                            y_0=y0_ext+Moffat_y_offset,
-                                            amplitude=15000, gamma=3, alpha=1,
-                                            bounds={'x_0':(x_min, x_max),
-                                                    'y_0':(y_min_1, y_max_1),
-                                                    'amplitude':(1,40000),
-                                                    'gamma':(0.1,30),
-                                                    'alpha':(0,10)},
-                                            fixed={'alpha':True, 'gamma':True},
-                                            tied=tied_1
-                                           )
-    else:
-        single_Moffat_ord = models.Moffat2D(x_0=x0_ext,
-                                            y_0=y0_ext+Moffat_y_offset,
-                                            amplitude=15000, gamma=3, alpha=1,
-                                            bounds={'x_0':(x_min, x_max),
-                                                    'y_0':(y_min_1, y_max_1),
-                                                    'amplitude':(1,40000),
-                                                    'gamma':(0.1,30),
-                                                    'alpha':(0,10)},
-                                            fixed={'alpha':True, 'gamma':True},
-                                           )
-
-    # Combine the two beams into a single model
-    complete_model = single_Moffat_ord
-    if not np.isnan(x0_ext) and not np.isnan(y0_ext):
-        complete_model += single_Moffat_ext
-
-    # Fit the model to the image
-    LevMar_fitter = fitting.LevMarLSQFitter()
-    fitted = LevMar_fitter(complete_model, xp, yp, im, maxiter=10000, acc=1e-12)
-
-    # x- and y-coordinates of the beam centers
-    if np.isnan(x0_ext) and np.isnan(y0_ext):
-        x_ord, y_ord = fitted.parameters[1:3]
-        x_ext, y_ext = x0_ext, y0_ext
-    else:
-        x_ord, y_ord = fitted[0].parameters[1:3]
-        x_ext, y_ext = fitted[1].parameters[1:3]
-
-    return np.array([[x_ext, y_ext],
-                     [x_ord, y_ord]])
-
-def fit_beam_centers_Moffat(method, Wollaston_used, Wollaston_45,
-                            camera_used, filter_used, tied_offset):
-    '''
-    Fit the beam-centers using 1 or 2 Moffat functions.
-
-    Input
-    -----
-    method : str
-        Method to use ('single-Moffat', 'double-Moffat').
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    Wollaston_45 : bool
-        If True, Wollaston_45 was used, else Wollaston_00 was used.
-    camera_used : str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        Filter that was used.
-    tied_offset : bool
-        Use a fixed beam-separation.
-
-    Output
-    ------
-    Moffat_PSF : list of 3D-arrays
-        Coordinates of the Moffat PSF centers for each cube. Each cube's
-        3D-array has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    '''
-
-    min_cube = 0
-    #if filter_used in ['L_prime', 'NB_3.74']:
-    for i, file in enumerate(path_reduced_files_selected):
-        cube = fits.getdata(file).astype(np.float32)
-        cube[np.isnan(cube)] = 0
-
-        if i == 0:
-            min_cube = np.mean(cube, axis=0, keepdims=True)
-        else:
-            min_cube = np.min(np.array([min_cube[0], np.mean(cube, axis=0)]),
-                              axis=0, keepdims=True)
-
-    Moffat_PSF = []
-    for i, file in enumerate(tqdm(path_reduced_files_selected, \
-                                  bar_format=pbar_format)):
-
-        # Read the data
-        cube = fits.getdata(file).astype(np.float32)
-        cube[np.isnan(cube)] = 0
-
-        # x and y values of each pixel
-        yp, xp = np.mgrid[0:cube.shape[1], 0:cube.shape[2]]
-
-        if not Wollaston_45:
-            mask = (yp > -1.5*xp+2430)[None,:]
-            mask = np.repeat(mask, cube.shape[0], axis=0)
-            cube[mask] = np.nanmean(cube[~mask])
-
-        # Find the PSFs from the first frame in the cube
-        (x0_ord, y0_ord), \
-        (x0_ext, y0_ext) \
-        = fit_initial_guess((cube-min_cube)[0], xp, yp, Wollaston_used,
-                            camera_used, filter_used)
-
-        # Set the background to 0
-        cube -= np.nanmedian(cube, axis=(1,2), keepdims=True)
-
-        # Fit each frame in the cube
-        Moffat_PSF.append(np.ones((len(cube),2,2))*np.nan)
-        for j, im in enumerate(cube):
-
-            # Apply a median filter
-            im = ndimage.median_filter(im, size=(3,3))
-
-            # Fit the (extra)-ordinary beams
-            if method=='double-Moffat':
-                # Fit a double-Moffat function to find the location of the beam
-                Moffat_PSF[-1][j,:,:] = fit_double_Moffat(im, xp, yp,
-                                                          x0_ext, y0_ext,
-                                                          camera_used,
-                                                          filter_used,
-                                                          tied_offset)
-            elif method=='single-Moffat':
-                # Fit a single-Moffat
-                Moffat_PSF[-1][j,:,:] = fit_single_Moffat(im, xp, yp,
-                                                          x0_ord, y0_ord,
-                                                          x0_ext, y0_ext,
-                                                          camera_used,
-                                                          filter_used,
-                                                          tied_offset)
-
-            # Sort the PSF locations so that ordinary beam comes first
-            idx_argsort = np.argsort(Moffat_PSF[-1][j,:,1])
-            Moffat_PSF[-1][j,:,:] = Moffat_PSF[-1][j,idx_argsort,:]
-
-    return Moffat_PSF
-
-def fit_beam_centers(method, Wollaston_used, Wollaston_45,
-                     camera_used, filter_used, tied_offset):
-    '''
-    Fit the beam-centers using a specified method.
-
-    Input
-    -----
-    method : str
-        Method to fit the beam-centers.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    Wollaston_45 : bool
-        If True, Wollaston_45 was used, else Wollaston_00 was used.
-    camera_used : str
-        Camera that was used ('S13','S27','L27','S54','L54').
-    filter_used : str
-        Filter that was used.
-    tied_offset : bool
-        Use a fixed beam-separation.
-
-    Output
-    ------
-    beam_centers : list of 3D-arrays
-        Coordinates of the beam-centers for each cube. Each cube's 3D-array
-        has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    '''
-
-    print_and_log(f'--- Fitting the beam centers using method \'{method}\'')
-
-    if method=='single-Moffat' or method=='double-Moffat':
-        # Fit a 2D Moffat function
-        beam_centers = fit_beam_centers_Moffat(method, Wollaston_used,
-                                               Wollaston_45, camera_used,
-                                               filter_used, tied_offset)
-
-    elif method=='maximum':
-        # Find 2 maxima in the images
-        beam_centers = fit_maximum(Wollaston_used, camera_used, filter_used)
-
-    return beam_centers
-
-def center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45):
-    '''
-    Re-center the beams and crop the images.
-
-    Input
-    -----
-    beam_centers : list of 3D-arrays
-        Coordinates of the beam-centers for each cube. Each cube's 3D-array
-        has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    size_to_crop : list
-        [height, width] to crop.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    Wollaston_45 : bool
-        If True, Wollaston_45 was used, else Wollaston_00 was used.
-    '''
-
-    print_and_log('--- Centering the beams')
-
-    global path_beams_files_selected
-
-    path_beams_files_selected = []
-    beams = []
-    for i, file in enumerate(tqdm(path_skysub_files_selected, \
-                                  bar_format=pbar_format)):
-
-        # Read the data
-        cube, header = fits.getdata(file, header=True)
-        cube = cube.astype(np.float32)
-        cube[np.isnan(cube)] = 0
-
-        # x and y values of each pixel
-        yp, xp = np.mgrid[0:cube.shape[1], 0:cube.shape[2]]
-
-        ord_beam_i, ext_beam_i = [], []
-        for j, im in enumerate(cube):
-
-            """
-            fig, ax = plt.subplots(figsize=(25,10), ncols=3)
-            ax[0].imshow(im)
-            ax[0].scatter(beam_centers[i][j,0,0], beam_centers[i][j,0,1])
-
-            ax[0].set(xlim=(beam_centers[i][j,0,0] - size_to_crop[1]/2,
-                            beam_centers[i][j,0,0] + size_to_crop[1]/2),
-                      ylim=(beam_centers[i][j,0,1] - size_to_crop[0]/2,
-                            beam_centers[i][j,0,1] + size_to_crop[0]/2)
-                      )
-            """
-
-            # Padding the image for large cropping sizes
-            pad_width = ((0, 0), (im.shape[1], im.shape[1]))
-            im = np.pad(im, pad_width, constant_values=0.0)
-
-            # Mask of values outside the image
-            im_mask = (im == 0)
-
-            # Shift the ordinary beam to the center of the image
-            y_shift = im.shape[0]/2 - (beam_centers[i][j,0,1] - yp.min())
-            x_shift = im.shape[1]/2 - (beam_centers[i][j,0,0] + pad_width[1][0]
-                                       - xp.min())
-
-            ord_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
-            # Replace values outside of image with 0
-            ord_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
-                                             order=0, cval=0.0)
-            ord_beam_ij[ord_beam_ij_mask] = 0
-
-            # Shift the extra-ordinary beam to the center of the image
-            y_shift = im.shape[0]/2 - (beam_centers[i][j,1,1] - yp.min())
-            x_shift = im.shape[1]/2 - (beam_centers[i][j,1,0] + pad_width[1][0]
-                                       - xp.min())
-            ext_beam_ij = ndimage.shift(im, [y_shift, x_shift], order=3)
-            # Replace values outside of image with 0
-            ext_beam_ij_mask = ndimage.shift(im_mask, [y_shift, x_shift],
-                                             order=0, cval=0.0)
-            ext_beam_ij[ext_beam_ij_mask] = 0
-
-            """
-            ax[1].imshow(ord_beam_ij)
-            ax[1].scatter(ord_beam_ij.shape[1]/2, ord_beam_ij.shape[0]/2)
-            ax[1].set(xlim=(ord_beam_ij.shape[1]/2 - size_to_crop[1]/2,
-                            ord_beam_ij.shape[1]/2 + size_to_crop[1]/2),
-                      ylim=(ord_beam_ij.shape[0]/2 - size_to_crop[0]/2,
-                            ord_beam_ij.shape[0]/2 + size_to_crop[0]/2))
-            """
-
-            # Indices to crop between
-            y_idx_low  = int(ord_beam_ij.shape[0]/2 - size_to_crop[0]/2 + 1/2)
-            y_idx_high = int(ord_beam_ij.shape[0]/2 + size_to_crop[0]/2 + 1/2)
-            x_idx_low  = int(ord_beam_ij.shape[1]/2 - size_to_crop[1]/2 + 1/2)
-            x_idx_high = int(ord_beam_ij.shape[1]/2 + size_to_crop[1]/2 + 1/2)
-
-            # Crop the images
-            ord_beam_ij = ord_beam_ij[y_idx_low:y_idx_high,
-                                      x_idx_low:x_idx_high]
-            ext_beam_ij = ext_beam_ij[y_idx_low:y_idx_high,
-                                      x_idx_low:x_idx_high]
-
-            """
-            ax[2].imshow(ord_beam_ij[::-1,:])
-            plt.show()
-            """
-
-            ord_beam_i.append(ord_beam_ij)
-            ext_beam_i.append(ext_beam_ij)
-
-        # Median-combine the (extra)-ordinary beam for one file
-        ord_beam_i = np.nanmedian(np.array(ord_beam_i), axis=0)
-        ext_beam_i = np.nanmedian(np.array(ext_beam_i), axis=0)
-
-        if Wollaston_45:
-
-            # Masks of values outside the image
-            ord_beam_i_mask = (ord_beam_i==0)
-            ext_beam_i_mask = (ext_beam_i==0)
-
-            # Rotate the images back to their initial orientation
-            ord_beam_i = ndimage.rotate(ord_beam_i, angle=45,
-                                        reshape=True, cval=np.nan)
-            ext_beam_i = ndimage.rotate(ext_beam_i, angle=45,
-                                        reshape=True, cval=np.nan)
-
-            # Rotate masks to replace values outside the image with nan
-            ord_beam_i_mask = ndimage.rotate(ord_beam_i_mask, angle=45,
-                                             reshape=True, order=0, cval=1)
-            ext_beam_i_mask = ndimage.rotate(ext_beam_i_mask, angle=45,
-                                             reshape=True, order=0, cval=1)
-
-            ord_beam_i[ord_beam_i_mask] = np.nan
-            ext_beam_i[ext_beam_i_mask] = np.nan
-
-        if Wollaston_used:
-            # Concatenate the ordinary and extra-ordinary beam and save as cube
-            beams_i = np.concatenate((ord_beam_i[None,:,:],
-                                      ext_beam_i[None,:,:]),
-                                     axis=0)
-            beams.append(beams_i)
-        else:
-            # Save the only beam as a cube
-            beams_i = ord_beam_i[None,:,:]
-            beams.append(beams_i)
-
-        # Save the calibrated data as a FITS file
-        file_beams = Path(str(file).replace('_skysub.fits', '_beams.fits'))
-        write_FITS_file(file_beams, beams_i, header=header)
-        path_beams_files_selected.append(file_beams)
-
-    path_beams_files_selected = np.sort(path_beams_files_selected)
-
-    # Perform sigma-clipping on all beams
-    open_AO_loop(np.array(beams), sigma_max=3)
-
-################################################################################
-# Sky-subtraction
-################################################################################
-
-def sky_background_fit(im, offset, next_offset, min_offset, y_ord_ext,
-                       remove_horizontal_stripes):
-    '''
-    Fit each row of pixels to approximate a background gradient.
-
-    Input
-    -----
-    im : 2D-array
-        Image.
-    offset : float
-        Offset of the current dithering-position.
-    next_offset : float
-        Offset of the next dithering-position.
-    min_offset : float
-        Minimum offset between the dithering-positions.
-    y_ord_ext : 1D-array
-        y-coordinates of the ordinary and extra-ordinary beam.
-    remove_horizontal_stripes : bool
-        If True, remove the horizontal stripes found in some observations.
-
-    Output
-    ------
-    background_model : 2D-array
-        Model of the background gradient.
-    '''
-    # Retrieve pixel coordinates
-    yp, xp = np.mgrid[0:im.shape[0], 0:im.shape[1]]
-
-    # Ignore certain rows in the fit
-    y_min = (y_ord_ext.min() - np.diff(y_ord_ext)*3/5)[0]
-    y_max = (y_ord_ext.max() + np.diff(y_ord_ext)*3/5)[0]
-
-    # Masks to not fit to the (offset) beams
-    mask_x_1 = np.ma.mask_or((xp < offset - 1.25*min_offset),
-                             (xp > offset + 1.25*min_offset))
-    mask_x_2 = np.ma.mask_or((xp < next_offset - 1.25*min_offset),
-                             (xp > next_offset + 1.25*min_offset))
-    mask_x = mask_x_1 & mask_x_2
-
-    if mask_x.sum() == 0:
-        # Mask covers entire frame
-        mask_x_1 = np.ma.mask_or((xp < offset - 0.5*min_offset),
-                                 (xp > offset + 0.5*min_offset))
-        mask_x_2 = np.ma.mask_or((xp < next_offset - 0.5*min_offset),
-                                 (xp > next_offset + 0.5*min_offset))
-        mask_x = mask_x_1 & mask_x_2
-
-    # Masks to not fit additional sources
-    _, low, high = sigma_clip(np.ma.masked_array(im, mask=~mask_x),
-                              sigma=2.5, maxiters=5, cenfunc='median',
-                              return_bounds=True, axis=1)
-    mask_sources = (im > low[:,None]) & (im < high[:,None])
-
-    mask_total = mask_x & mask_sources
-
-    # Fit the data using astropy.modeling
-    p_init = models.Linear1D()
-    fit_p = fitting.LevMarLSQFitter()
-
-    if remove_horizontal_stripes:
-        # Linear fit to each row
-        n_rows_combined = 1
-    else:
-        # Linear fit to every 5th row
-        n_rows_combined = 5
-
-    background_model = np.zeros(im.shape)
-    for i in range((n_rows_combined-1), len(im), n_rows_combined):
-
-        i_min = i - (n_rows_combined-1)
-        i_max = i
-
-        if (i_max < y_max) and (i_min > y_min):
-
-            # Fit a linear function to each row
-            if remove_horizontal_stripes:
-                xp_masked = xp[i_max][mask_total[i_max]]
-                im_masked_median = im[i_max][mask_total[i_max]]
-
-            else:
-                # Mask of the current rows
-                mask_rows = mask_total & (yp >= i_min) & (yp <= i_max)
-
-                # x-coordinates of row
-                mask_rows_flatten = (mask_rows.sum(axis=0) != 0)
-                xp_masked = np.ma.masked_array(xp[i_max],
-                                               mask=~mask_rows_flatten)
-                xp_masked = np.ma.compressed(xp_masked)
-
-                # Median-combine along vertical axis
-                im_masked = np.ma.masked_array(im, mask=~mask_rows)
-                im_masked_median = np.nanmedian(im_masked[i_min:i_max+1],
-                                                axis=0)
-                im_masked_median = im_masked_median[np.isfinite(im_masked_median)]
-
-            if np.isfinite(im_masked_median).any():
-                p = fit_p(p_init, xp_masked, im_masked_median)
-
-                # Store the horizontal representation
-                for j in range(i_min, i_max+1):
-                    background_model[j] = p(xp[j])
-
-    if not remove_horizontal_stripes:
-        # Smoothen the horizontal polynomial models
-        background_model = ndimage.gaussian_filter(background_model, sigma=5)
-
-    return background_model
-
-def sky_subtraction_box_median(files, beam_centers, min_offset,
-                               remove_horizontal_stripes):
-    '''
-    Sky-subtraction using two rectangles at an offset.
-
-    Input
-    -----
-    files : list
-        Filenames to sky-subtract
-    beam_centers : list of 3D-arrays
-        Coordinates of the beam-centers for each cube. Each cube's 3D-array
-        has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    min_offset : float
-        Minimum offset from the beam-centers.
-    remove_horizontal_stripes : bool
-        If True, remove the horizontal stripes found in some observations.
-    '''
-
-    if len(files) == 1:
-        pbar_disable = True
-    else:
-        pbar_disable = False
-
-    with tqdm(total=len(files), bar_format=pbar_format, \
-              disable=pbar_disable) as pbar:
-
-        for i, file in enumerate(files):
-
-            if len(files) != 1:
-                pbar.update(1)
-
-            # Read the data
-            cube, header = fits.getdata(file, header=True)
-            cube = cube.astype(np.float32)
-
-            # Pixel coordinates
-            yp, xp = np.mgrid[0:cube.shape[1], 0:cube.shape[2]]
-
-            # Retrieve the location of the beams
-            x = np.nanmedian(beam_centers[i][:,:,0])
-
-            # Mask for pixel sufficiently offset
-            mask_x = np.ma.mask_or((xp[0] > int(x+min_offset)),
-                                   (xp[0] < int(x-min_offset)))
-
-            # Take the median along the x-axis
-            sky = np.nanmedian(cube[:,:,mask_x], axis=2, keepdims=True)
-
-            # Subtract the sky
-            cube -= sky
-
-            # Remove any leftover background signal with a linear fit
-            for j in range(len(cube)):
-                x_j = np.nanmean(beam_centers[i][j,:,0])
-                y_j = beam_centers[i][j,:,1]
-                cube[j] -= sky_background_fit(cube[j], x_j, x_j, min_offset,
-                                              y_j, remove_horizontal_stripes)
-
-            # Add filename
-            file_skysub = Path(str(file).replace('_reduced.fits',
-                                                 '_skysub.fits'))
-            path_skysub_files_selected.append(file_skysub)
-
-            # Save the sky-subtracted image to a FITS file
-            write_FITS_file(file_skysub, cube, header=header)
-
-def sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
-                              Wollaston_used, remove_horizontal_stripes):
-    '''
-    Sky-subtraction using the next dithering-offset
-    with the same Stokes parameter.
-
-    Input
-    -----
-    beam_centers : list of 3D-arrays
-        Coordinates of the beam-centers for each cube. Each cube's 3D-array
-        has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    min_offset : float
-        Minimum offset from the beam-centers.
-    HWP_used : bool
-        If True, HWP was used, else position angle was changed.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    remove_horizontal_stripes : bool
-        If True, remove the horizontal stripes found in some observations.
-    '''
-
-    StokesPara = assign_Stokes_parameters(path_reduced_files_selected,
-                                          HWP_used, Wollaston_used)
-    for i in range(len(StokesPara)):
-        StokesPara[i] = StokesPara[i].replace('-', '')
-        StokesPara[i] = StokesPara[i].replace('+', '')
-
-    offsets = []
-    for i in range(len(path_reduced_files_selected)):
-        offsets.append(np.nanmean(beam_centers[i][:,:,:], axis=(0,1)))
-    offsets = np.array(offsets)
-
-    idx_offsets = np.arange(len(offsets))
-
-    for i, file in enumerate(tqdm(path_reduced_files_selected, \
-                                  bar_format=pbar_format)):
-
-        # Read the data
-        cube, header = fits.getdata(file, header=True)
-        cube = cube.astype(np.float32)
-
-        # Mask for the cubes with the same Stokes parameter
-        mask_StokesPara = (StokesPara == StokesPara[i])
-
-        # New minimal offset which can be decreased
-        new_min_offset = min_offset
-
-        # Mask of cubes with sufficient offsets
-        mask_sufficient_offset = (np.sqrt(np.sum((offsets-offsets[i])**2,
-                                                 axis=1)) >= new_min_offset)
-
-        while not np.any(mask_sufficient_offset):
-            # Decrease the offset and try again
-            new_min_offset -= 5
-            mask_sufficient_offset = (np.sqrt(np.sum((offsets-offsets[i])**2,
-                                                     axis=1)) >= new_min_offset)
-
-            if (new_min_offset < 60):
-                sky_subtraction_box_median([file], np.array([beam_centers[i]]),
-                                         min_offset, remove_horizontal_stripes)
-                break
-
-        if (new_min_offset < 60):
-            continue
-
-        mask_next_offsets = (idx_offsets > i)
-        mask_prev_offsets = (idx_offsets < i)
-
-        # Next dithering position with same Stokes parameter
-        mask_next_same = mask_sufficient_offset * mask_next_offsets * \
-                         mask_StokesPara
-        # Previous dithering position with same Stokes parameter
-        mask_prev_same = mask_sufficient_offset * mask_prev_offsets * \
-                         mask_StokesPara
-
-        # Next dithering position with different Stokes parameter
-        mask_next_diff = mask_sufficient_offset * mask_next_offsets
-        # Previous dithering position with different Stokes parameter
-        mask_prev_diff = mask_sufficient_offset * mask_prev_offsets
-
-        if np.any(mask_next_same):
-            # First offset with same Stokes parameter
-            idx_next_offset = idx_offsets[mask_next_same][0]
-
-        elif np.any(mask_prev_same):
-            # Previous offset with same Stokes parameter
-            idx_next_offset = idx_offsets[mask_prev_same][-1]
-
-        elif np.any(mask_next_diff):
-            # First offset with different Stokes parameter
-            idx_next_offset = idx_offsets[mask_next_diff][0]
-
-        elif np.any(mask_prev_diff):
-            # Previous offset with different Stokes parameter
-            idx_next_offset = idx_offsets[mask_prev_diff][-1]
-
-
-        # Read the data of the next dithering offset
-        file_next_offset = path_reduced_files_selected[idx_next_offset]
-        cube_next_offset = fits.getdata(file_next_offset).astype(np.float32)
-
-        # Subtract the next dithering position from the original
-        cube -= np.nanmedian(cube_next_offset, axis=0, keepdims=True)
-
-        #"""
-        # Remove any leftover background signal with linear fits
-        for j in range(len(cube)):
-            y_j = beam_centers[i][j,:,1]
-            cube[j] -= sky_background_fit(cube[j], offsets[i,0],
-                                          offsets[idx_next_offset,0],
-                                          min_offset, y_j,
-                                          remove_horizontal_stripes)
-        #"""
-        # Add filename
-        file_skysub = Path(str(file).replace('_reduced.fits', '_skysub.fits'))
-        path_skysub_files_selected.append(file_skysub)
-
-        # Save the sky-subtracted image to a FITS file
-        write_FITS_file(file_skysub, cube, header=header)
-
-    if (new_min_offset < 35):
-        print_and_log('    Sky-subtraction not possible with method \'dithering-offset\', used method \'box-median\'')
-
-    if (new_min_offset!=min_offset):
-        print_and_log(f'    sky_subtraction_min_offset too high, reduced to {new_min_offset} pixels')
-
-def sky_subtraction(method, min_offset, beam_centers, HWP_used,
-                    Wollaston_used, remove_horizontal_stripes):
-    '''
-    Sky-subtraction using a specified method.
-
-    Input
-    -----
-    method : str
-        Method for sky-subtraction.
-    min_offset : float
-        Minimum offset from the beam-centers.
-    beam_centers : list of 3D-arrays
-        Coordinates of the beam-centers for each cube. Each cube's 3D-array
-        has shape (cube-frames, ordinary/extra-ordinary beam, x/y).
-    HWP_used : bool
-        If True, HWP was used, else position angle was changed.
-    Wollaston_used : bool
-        If True, Wollaston was used, else wiregrid was used.
-    remove_horizontal_stripes : bool
-        If True, remove the horizontal stripes found in some observations.
-    '''
-
-    print_and_log(f'--- Sky-subtraction using method: \'{method}\'')
-
-    global path_skysub_files_selected
-    path_skysub_files_selected = []
-
-    if method=='dithering-offset':
-        sky_subtraction_dithering(beam_centers, min_offset, HWP_used,
-                                  Wollaston_used, remove_horizontal_stripes)
-
-    elif method=='box-median':
-        sky_subtraction_box_median(path_reduced_files_selected, beam_centers,
-                                   min_offset, remove_horizontal_stripes)
-
-    path_skysub_files_selected = np.sort(path_skysub_files_selected)
-
-################################################################################
 # Pre-processing functions
 ################################################################################
 
@@ -1913,7 +366,9 @@ def open_AO_loop(beams, sigma_max=5):
             open_loop_files.write(str(file.resolve())+'\n')
             open_loop_files.close()
 
-    plot_open_AO_loop(max_counts, bounds_ord_beam, bounds_ext_beam)
+    figs.plot_open_AO_loop(
+        path_reduced_files_selected, max_counts, bounds_ord_beam, bounds_ext_beam
+        )
 
 #####################################
 # Calibration FLAT, BPM and DARK
@@ -1980,9 +435,9 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
     path_FLAT_files = sorted(Path(path_FLAT_dir).glob('*.fits'))
     # Ensure that FLATs and DARKs have the same image shapes
     path_FLAT_files = [file_i for file_i in path_FLAT_files
-                       if (read_from_FITS_header(file_i, 'NAXIS')==2)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
+                       if (af.read_from_FITS_header(file_i, 'NAXIS')==2)
+                       and (af.read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
+                       and (af.read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
                       ]
     path_FLAT_files = np.array(path_FLAT_files)
 
@@ -1997,8 +452,8 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
     # Ensure that FLATs and DARKs have the same image shapes
     path_DARK_files = [file_i for file_i in path_DARK_files
-                       if (read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
-                       and (read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
+                       if (af.read_from_FITS_header(file_i, 'ESO DET WIN NX') == 1024)
+                       and (af.read_from_FITS_header(file_i, 'ESO DET WIN NY') == 1024)
                       ]
     path_DARK_files = np.array(path_DARK_files)
 
@@ -2027,23 +482,23 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
     for i, path_FLAT_file_i in enumerate(path_FLAT_files):
 
         # Read the detector keyword
-        camera_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI7 ID')
+        camera_i = af.read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI7 ID')
 
         # Read the filter keyword(s)
-        filter_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI6 NAME')
+        filter_i = af.read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI6 NAME')
         if filter_i == 'empty':
-            filter_i = read_from_FITS_header(path_FLAT_file_i,
+            filter_i = af.read_from_FITS_header(path_FLAT_file_i,
                                              'ESO INS OPTI5 NAME')
 
         # Read the exposure time
-        expTime_i = read_from_FITS_header(path_FLAT_file_i, 'EXPTIME')
+        expTime_i = af.read_from_FITS_header(path_FLAT_file_i, 'EXPTIME')
 
         # Read the lamp status (on/off). True if on, False if off.
-        lampStatus_i = (read_from_FITS_header(path_FLAT_file_i,
+        lampStatus_i = (af.read_from_FITS_header(path_FLAT_file_i,
                                               'ESO INS LAMP2 SET') != 0)
 
         # Read whether the Wollaston prism was inserted
-        OPTI1_ID_i = read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI1 ID')
+        OPTI1_ID_i = af.read_from_FITS_header(path_FLAT_file_i, 'ESO INS OPTI1 ID')
 
         FLAT_cameras.append(camera_i)
         FLAT_filters.append(filter_i)
@@ -2080,10 +535,10 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
     for i, path_DARK_file_i in enumerate(path_DARK_files):
 
         # Read the detector keyword
-        camera_i = read_from_FITS_header(path_DARK_file_i, 'ESO INS OPTI7 ID')
+        camera_i = af.read_from_FITS_header(path_DARK_file_i, 'ESO INS OPTI7 ID')
 
         # Read the exposure time
-        expTime_i = read_from_FITS_header(path_DARK_file_i, 'EXPTIME')
+        expTime_i = af.read_from_FITS_header(path_DARK_file_i, 'EXPTIME')
 
         DARK_cameras.append(camera_i)
         DARK_expTimes.append(expTime_i)
@@ -2369,7 +824,7 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
     DARK_DATE_OBS = np.array(DARK_DATE_OBS)
 
     # Read SCIENCE observing date from header
-    DATE_OBS = read_from_FITS_header(SCIENCE_file, 'DATE-OBS')
+    DATE_OBS = af.read_from_FITS_header(SCIENCE_file, 'DATE-OBS')
     DATE_OBS = Time(DATE_OBS, format='isot', scale='utc')
 
     # Difference observing date between SCIENCE and FLAT/BPM
@@ -2389,14 +844,14 @@ def read_master_CALIB(SCIENCE_file, filter_used, path_FLAT_files,
     path_DARK_file = path_DARK_files[np.argmin(np.abs(DARK_DATE_delta))]
 
     # Load the master FLAT, BPM and DARK
-    master_FLAT = read_FITS_as_cube(path_FLAT_file)[0]
-    master_BPM  = read_FITS_as_cube(path_BPM_file)[0]
-    master_DARK = read_FITS_as_cube(path_DARK_file)[0]
+    master_FLAT = af.read_FITS_as_cube(path_FLAT_file)[0]
+    master_BPM  = af.read_FITS_as_cube(path_BPM_file)[0]
+    master_DARK = af.read_FITS_as_cube(path_DARK_file)[0]
 
     # DARK exposure time
-    DARK_expTime = read_from_FITS_header(path_DARK_file, 'EXPTIME')
+    DARK_expTime = af.read_from_FITS_header(path_DARK_file, 'EXPTIME')
     # SCIENCE exposure time
-    SCIENCE_expTime = read_from_FITS_header(SCIENCE_file, 'EXPTIME')
+    SCIENCE_expTime = af.read_from_FITS_header(SCIENCE_file, 'EXPTIME')
 
     return master_FLAT, master_BPM, master_DARK, DARK_expTime, SCIENCE_expTime
 
@@ -2463,18 +918,18 @@ def read_unique_obsTypes(path_SCIENCE_files, split_observing_blocks, HWP_used,
     global path_output_dirs
 
     # Read information from the FITS headers
-    expTimes = np.array([read_from_FITS_header(x, 'EXPTIME')
+    expTimes = np.array([af.read_from_FITS_header(x, 'EXPTIME')
                          for x in path_SCIENCE_files])
     OBS_IDs, filters = [], []
     for x in path_SCIENCE_files:
         try:
-            OBS_IDs.append(read_from_FITS_header(x, 'ESO OBS ID'))
+            OBS_IDs.append(af.read_from_FITS_header(x, 'ESO OBS ID'))
         except KeyError:
             OBS_IDs.append(0)
 
-        filter_i = read_from_FITS_header(x, 'ESO INS OPTI6 NAME')
+        filter_i = af.read_from_FITS_header(x, 'ESO INS OPTI6 NAME')
         if filter_i == 'empty':
-            filter_i = read_from_FITS_header(x, 'ESO INS OPTI5 NAME')
+            filter_i = af.read_from_FITS_header(x, 'ESO INS OPTI5 NAME')
         filters.append(filter_i)
 
     filters = np.array(filters)
@@ -2564,7 +1019,7 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files,
         path_reduced_files_selected.append(reduced_file)
 
         # Load the un-calibrated data
-        cube, header = read_FITS_as_cube(file)
+        cube, header = af.read_FITS_as_cube(file)
 
         # Read the corresponding master FLAT, BPM and DARK
         master_FLAT, \
@@ -2608,7 +1063,7 @@ def calibrate_SCIENCE(path_SCIENCE_files, path_FLAT_files, path_BPM_files,
                                   reshape=True, cval=np.nan)
 
         # Save the calibrated data
-        write_FITS_file(reduced_file, cube, header=header)
+        af.write_FITS_file(reduced_file, cube, header=header)
 
     path_reduced_files_selected = np.sort(path_reduced_files_selected)
 
@@ -2674,24 +1129,47 @@ def pre_processing(window_shape, window_start, remove_data_products,
                       window_shape, window_start, y_pixel_range,
                       filter_used, FLAT_pol_mask, Wollaston_45)
     print_and_log('--- Plotting the raw and reduced images')
-    plot_reduction(plot_reduced=True, plot_skysub=False)
+    figs.plot_reduction(
+        path_SCIENCE_files_selected=path_SCIENCE_files_selected, 
+        path_reduced_files_selected=path_reduced_files_selected, 
+        )
 
     # Find the beam centers
-    beam_centers = fit_beam_centers(centering_method, Wollaston_used,
-                                    Wollaston_45, camera_used,
-                                    filter_used, tied_offset)
+    print_and_log(f'--- Fitting the beam centers using method \'{centering_method}\'')
+    beam_centers = beam.fit_beam_centers(
+        centering_method, Wollaston_used, Wollaston_45, 
+        camera_used, filter_used, tied_offset, 
+        path_reduced_files_selected
+        )
 
     # Subtract the sky from the images
-    sky_subtraction(sky_subtraction_method, sky_subtraction_min_offset,
-                    beam_centers, HWP_used, Wollaston_used,
-                    remove_horizontal_stripes)
+    print_and_log(f'--- Sky-subtraction using method: \'{sky_subtraction_method}\'')
+    global path_skysub_files_selected
+    path_skysub_files_selected = sky.sky_subtraction(
+        sky_subtraction_method, sky_subtraction_min_offset, beam_centers, 
+        HWP_used, Wollaston_used, remove_horizontal_stripes, 
+        path_reduced_files_selected
+        )
 
     # Center the beams and save
-    center_beams(beam_centers, size_to_crop, Wollaston_used, Wollaston_45)
+    print_and_log('--- Centering the beams')
+    global path_beams_files_selected
+    beams, path_beams_files_selected = beam.center_beams(
+        beam_centers, size_to_crop, Wollaston_used, 
+        Wollaston_45, path_skysub_files_selected
+        )
+    # Perform sigma-clipping on all beams
+    open_AO_loop(np.array(beams), sigma_max=3)
+
     print_and_log('--- Plotting the sky-subtracted and cropped images')
-    plot_reduction(plot_reduced=True, plot_skysub=True,
-                   beam_centers=beam_centers, size_to_crop=size_to_crop,
-                   Wollaston_45=Wollaston_45)
+    figs.plot_reduction(
+        path_SCIENCE_files_selected=path_SCIENCE_files_selected, 
+        path_reduced_files_selected=path_reduced_files_selected, 
+        path_skysub_files_selected=path_skysub_files_selected, 
+        path_beams_files_selected=path_beams_files_selected, 
+        beam_centers=beam_centers, size_to_crop=size_to_crop,
+        Wollaston_45=Wollaston_45
+        )
 
     if remove_data_products:
         # Remove the data products
@@ -4021,7 +2499,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     path_beams_files_selected = np.array(path_beams_files_selected)
 
     # Assign Stokes parameters to each observation
-    StokesPara = assign_Stokes_parameters(path_beams_files_selected,
+    StokesPara = af.assign_Stokes_parameters(path_beams_files_selected,
                                           HWP_used, Wollaston_used)
 
     mask_Q = np.ma.mask_or((StokesPara=='Q+'), (StokesPara=='Q-'))
@@ -4071,7 +2549,7 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
     beams = np.array(beams)
 
     xc, yc = (beams.shape[3]-1)/2, (beams.shape[2]-1)/2
-    r, phi = r_phi(beams[0,0], xc, yc)
+    r, phi = af.r_phi(beams[0,0], xc, yc)
     r, phi = r.astype(np.float32), phi.astype(np.float32)
 
     # Saturated-pixel mask
@@ -4333,7 +2811,7 @@ def run_pipeline(path_SCIENCE_dir,
                     }
     for x in path_SCIENCE_files:
         for key in dict_headers.keys():
-            dict_headers[key].append(read_from_FITS_header(x, key))
+            dict_headers[key].append(af.read_from_FITS_header(x, key))
 
     # Unique combination of HWP/camera/window shape
     OBS_configs = np.array(list(dict_headers.values())).T
