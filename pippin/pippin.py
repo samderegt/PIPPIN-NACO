@@ -281,7 +281,7 @@ def remove_bad_pixels(cube, combined_bpm):
     # Take median from 5x5 box of pixels, excluding the central pixel
     box = np.ones((1, 5, 5))
     box[:,2,2] = 0.
-
+    
     # Apply the median filter
     filtered_cube = ndimage.median_filter(cube, footprint=box)
 
@@ -512,6 +512,15 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
     FLAT_expTimes   = np.array(FLAT_expTimes)
     FLAT_lampStatus = np.array(FLAT_lampStatus)
     FLAT_OPTI1_ID   = np.array(FLAT_OPTI1_ID)
+
+    if (FLAT_cameras=='L27').any():
+        if (FLAT_lampStatus[FLAT_cameras=='L27']==FLAT_lampStatus[FLAT_cameras=='L27'][0]).all():
+            # Turn half the FLATs into lamp-on/off
+            new_FLAT_lampStatus = FLAT_lampStatus[FLAT_cameras=='L27'].copy()
+            new_FLAT_lampStatus[len(new_FLAT_lampStatus)//2:] = \
+                'False' if FLAT_lampStatus[0]=='True' else 'True'
+
+            FLAT_lampStatus[FLAT_cameras=='L27'] = new_FLAT_lampStatus
 
     # Determine the unique configurations
     FLAT_configs = np.vstack((FLAT_cameras, FLAT_filters, FLAT_expTimes,
@@ -1782,9 +1791,13 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
             I_QU_frames[f'cube_I_{key}-'] = ind_I[mask_QU_min]
 
         elif mask_QU_plus.any() or mask_QU_min.any():
-            QU_frames[f'cube_{key}'] = ind_QU[mask_QU] * \
-                                       (-1*mask_QU_min[mask_QU][:,None,None] + \
-                                       1*mask_QU_plus[mask_QU][:,None,None])
+            if ind_QU[mask_QU].ndim == 3:    
+                QU_frames[f'cube_{key}'] = ind_QU[mask_QU] * \
+                (-1*mask_QU_min[mask_QU][:,None,None] + 1*mask_QU_plus[mask_QU][:,None,None])
+            elif ind_QU[mask_QU].ndim == 2:
+                QU_frames[f'cube_{key}'] = ind_QU[mask_QU] * \
+                (-1*mask_QU_min[mask_QU][:,None] + 1*mask_QU_plus[mask_QU][:,None])
+
             I_QU_frames[f'cube_I_{key}'] = ind_I[mask_QU]
 
         # Calculate the individual parameters
@@ -1833,6 +1846,7 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
     # Stokes Q parameters
     Q_frames, I_Q_frames = double_difference_QU(Q_frames, I_Q_frames, 'Q',
                                                 mask_Qmin, mask_Qplus)
+    print(ind_QU.shape)
     # Stokes U parameters
     U_frames, I_U_frames = double_difference_QU(U_frames, I_U_frames, 'U',
                                                 mask_Umin, mask_Uplus)
@@ -2003,8 +2017,9 @@ def final_Stokes_frames(median_Q, median_U, r_deprojected, phi, theta=None):
         Azimuthal Stokes U_phi parameter scaled by the squared radius.
     '''
 
-    r_deprojected = r_deprojected[:,None]
-    phi = phi[:,None]
+    if (median_Q.ndim == 2) and (median_U.ndim == 2):
+        r_deprojected = r_deprojected[:,None]
+        phi = phi[:,None]
 
     # Polarised intensity
     PI    = np.sqrt(median_Q**2 + median_U**2)
@@ -2404,8 +2419,12 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
 
             # Move the pixel-axis to the first axis
             im_to_save = frames[key]
+            print(key, im_to_save.shape)
             if (im_to_save.ndim == 3) or key.startswith('cube_'):
                 im_to_save = np.moveaxis(im_to_save, 0, -1)
+
+            print(mask_beams.shape, im_to_save.shape)
+            print()
 
             # Reshape the array to form an image
             new_shape      = (*mask_beams.shape, *im_to_save.shape[1:])
@@ -2666,7 +2685,11 @@ def PDI(r_inner_IPS, r_outer_IPS, crosstalk_correction, minimise_U_phi,
                   U_frames['median_U_CTC_IPS'],
                   r, r_crosstalk, r_deprojected, phi)
 
-        if not HWP_used and Wollaston_used:
+        if not HWP_used and Wollaston_used and \
+            (Q_frames['cube_Q+'] is not None) and \
+            (Q_frames['cube_Q-'] is not None) and \
+            (U_frames['cube_U+'] is not None) and \
+            (U_frames['cube_U-'] is not None):
 
             # Create extended images if the position angle was rotated
             Q_frames, I_Q_frames, U_frames, I_U_frames, I_frames, PI_frames \
@@ -2804,7 +2827,7 @@ def run_pipeline(path_SCIENCE_dir,
     # Read information from the SCIENCE headers --------------------------------
     dict_headers = {'ESO INS GRP ID':[],                      # HWP
                     'ESO INS OPTI1 ID':[],                    # Wollaston prism
-                    #'ESO INS OPTI4 ID':[],                    # Wiregrid
+                    'ESO INS OPTI4 ID':[],                    # Wiregrid
                     'ESO INS OPTI7 ID':[],                    # Detector
                     'ESO DET WIN NX':[], 'ESO DET WIN NY':[], # Window shape
                     'ESO DET WIN STARTX':[], 'ESO DET WIN STARTY':[]
@@ -2820,14 +2843,14 @@ def run_pipeline(path_SCIENCE_dir,
 
         # Usage of HWP, Wollaston prism, wiregrid and camera
         HWP_used       = (OBS_config_i[:2]=='Half_Wave_Plate').any()
-        Wollaston_used = (np.ma.mask_or(OBS_config_i[:2]=='Wollaston_00',
-                                        OBS_config_i[:2]=='Wollaston_45')
+        Wollaston_used = (np.ma.mask_or(OBS_config_i[:3]=='Wollaston_00',
+                                        OBS_config_i[:3]=='Wollaston_45')
                          ).any()
-        camera_used    = OBS_config_i[2]
+        camera_used    = OBS_config_i[3]
 
         Wollaston_45 = False
         if Wollaston_used:
-            Wollaston_45 = (OBS_config_i[:2]=='Wollaston_45').any()
+            Wollaston_45 = (OBS_config_i[:3]=='Wollaston_45').any()
 
         if OBS_config_i[1] in ['FLM_13', 'FLM_27', 'FLM_54']:
             # Polarimetric mask was not used

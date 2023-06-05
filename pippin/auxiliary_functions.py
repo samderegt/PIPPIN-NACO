@@ -54,7 +54,7 @@ def Wollaston_beam_separation(camera, filter=''):
     # From NACO user manual: Separation in pixels
     all_offsets = {'S13_H':260, 'S13_Ks':254, 'S13':257,
                    'S27_H':126, 'S27_Ks':122, 'S27':124,
-                   'S54_H':62, 'S54_Ks':61, 'S54':61.5,
+                   'S54_H':62, 'S54_Ks':61, 'S54':62,
                    'L27':110, 'L54':55}
 
     key_camera = camera

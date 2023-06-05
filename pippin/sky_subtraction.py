@@ -70,7 +70,14 @@ def sky_background_fit(im, offset, next_offset, min_offset, y_ord_ext,
     _, low, high = sigma_clip(np.ma.masked_array(im, mask=~mask_x),
                               sigma=2.5, maxiters=5, cenfunc='median',
                               return_bounds=True, axis=1)
-    mask_sources = (im > low[:,None]) & (im < high[:,None])
+    if isinstance(low, np.ndarray) and isinstance(high, np.ndarray):
+        mask_sources = (im > low[:,None]) & (im < high[:,None])
+    elif isinstance(low, np.ndarray):
+        mask_sources = (im > low[:,None]) & (im < high)
+    elif isinstance(high, np.ndarray):
+        mask_sources = (im > low) & (im < high[:,None])
+    else:
+        mask_sources = (im > low) & (im < high)
 
     mask_total = mask_x & mask_sources
 
