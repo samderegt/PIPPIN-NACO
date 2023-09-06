@@ -109,44 +109,28 @@ Depending on the observations, the :file:`PDI/` directory contains the following
 
 Total intensities:
 
-- :file:`I.fits`: Total intensity. (CUBE_I, MEDIAN_I, CUBE_I_CTC, MEDIAN_I_CTC)
-   - (CUBE_I, MEDIAN_I, CUBE_I_CTC, MEDIAN_I_CTC)
-- :file:`I_Q.fits`: Total intensity. (CUBE_I_Q, MEDIAN_I_Q)
-- :file:`I_Q+.fits`: Total intensity. (CUBE_I_Q+, MEDIAN_I_Q+)
-- :file:`I_Q-.fits`: Total intensity. (CUBE_I_Q-, MEDIAN_I_Q-)
-- :file:`I_U.fits`: Total intensity. (CUBE_I_U, MEDIAN_I_U, CUBE_I_U_CTC, MEDIAN_I_U_CTC)
-- :file:`I_U+.fits`: Total intensity. (CUBE_I_U+, MEDIAN_I_U+, CUBE_I_U+_CTC, MEDIAN_I_U+_CTC)
-- :file:`I_U-.fits`: Total intensity. (CUBE_I_U-, MEDIAN_I_U-, CUBE_I_U-_CTC, MEDIAN_I_U-_CTC)
+- :file:`I.fits`: Total intensity. [``CUBE_I,`` ``MEDIAN_I``, ``CUBE_I_CTC,`` ``MEDIAN_I_CTC``]
+- :file:`I_Q.fits`: Intensity as :math:`I_Q = \frac{1}{2}(I_{Q^+} + I_{Q^-})`. [``CUBE_I_Q,`` ``MEDIAN_I_Q``]
+- :file:`I_Q+.fits`: Intensity of :math:`Q^+` measurements. [``CUBE_I_Q+``, ``MEDIAN_I_Q+``]
+- :file:`I_Q-.fits`: Intensity of :math:`Q^-` measurements. [``CUBE_I_Q-``, ``MEDIAN_I_Q-``]
+- :file:`I_U.fits`: Intensity as :math:`I_U = \frac{1}{2}(I_{U^+} + I_{U^-})`. [``CUBE_I_U``, ``MEDIAN_I_U``, ``CUBE_I_U_CTC``, ``MEDIAN_I_U_CTC``]
+- :file:`I_U+.fits`: Intensity of :math:`U^+` measurements. [``CUBE_I_U+``, ``MEDIAN_I_U+``, ``CUBE_I_U+_CTC``, ``MEDIAN_I_U+_CTC``]
+- :file:`I_U-.fits`: Intensity of :math:`U^-` measurements. [``CUBE_I_U-``, ``MEDIAN_I_U-``, ``CUBE_I_U-_CTC``, ``MEDIAN_I_U-_CTC``]
 
 Stokes parameters:
 
-- :file:`cube_Q+.fits`: Stokes :math:`Q^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_Q-.fits`: Stokes :math:`Q^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_Q.fits`: Stokes :math:`Q = \frac{1}{2}(Q^+ - Q^-)` parameter per combination of :math:`Q^\pm` frames.
-- :file:`cube_U+.fits`: Stokes :math:`U^+ = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_U-.fits`: Stokes :math:`U^- = I_\mathrm{ord} - I_\mathrm{ext}` parameter per frame.
-- :file:`cube_U.fits`: Stokes :math:`U = \frac{1}{2}(U^+ - U^-)` parameter per combination of :math:`U^\pm` frames.
-
-Median-combined Stokes parameters:
-
-- :file:`median_Q+.fits`: Median-combined over all :math:`Q^+` observations.
-- :file:`median_Q-.fits`: Median-combined over all :math:`Q^-` observations.
-- :file:`median_Q.fits`: Median-combined over all :math:`Q` observations.
-- :file:`median_Q_IPS.fits`: Median-combined + IP-corrected Stokes :math:`Q_\mathrm{IPS}` parameter.
-- :file:`median_U+.fits`: Median-combined over all :math:`U^+` observations.
-- :file:`median_U-.fits`: Median-combined over all :math:`U^-` observations.
-- :file:`median_U.fits`: Median-combined over all :math:`U` observations.
-- :file:`median_U_IPS.fits`: Median-combined + IP-corrected Stokes :math:`U_\mathrm{IPS}` parameter.
+- :file:`Q.fits`: Stokes :math:`Q = \frac{1}{2}(Q^+ - Q^-)`. [``CUBE_Q``, ``MEDIAN_Q``, ``MEDIAN_Q_IPS``, ``MEDIAN_Q_CTC_IPS``]
+- :file:`Q+.fits`: Stokes :math:`Q^+ = I_\mathrm{ord} - I_\mathrm{ext}`. [``CUBE_Q+``, ``MEDIAN_Q+``]
+- :file:`Q-.fits`: Stokes :math:`Q^- = I_\mathrm{ord} - I_\mathrm{ext}`. [``CUBE_Q-``, ``MEDIAN_Q-``]
+- :file:`U.fits`: Stokes :math:`U = \frac{1}{2}(U^+ - U^-)`. [``CUBE_U``, ``MEDIAN_U``, ``MEDIAN_U_IPS``, ``MEDIAN_U_CTC_IPS``]
+- :file:`U+.fits`: Stokes :math:`U^+ = I_\mathrm{ord} - I_\mathrm{ext}`. [``CUBE_U+``, ``MEDIAN_U+``]
+- :file:`U-.fits`: Stokes :math:`U^- = I_\mathrm{ord} - I_\mathrm{ext}`. [``CUBE_U-``, ``MEDIAN_U-``]
 
 Final polarised light products:
 
-- :file:`P_I.fits`: Polarised intensity :math:`PI = \sqrt{Q_\mathrm{IPS}^2 + U_\text{IPS}^2}`.
-- :file:`P_I_r2.fits`: Polarised intensity :math:`PI` scaled by the de-projected squared separation :math:`r^2`.
-- :file:`Q_phi.fits`: Azimuthal Stokes :math:`Q_\phi = - Q_\mathrm{IPS} \cos 2\phi - U_\mathrm{IPS} \sin 2\phi` parameter.
-- :file:`Q_phi_r2.fits`: Azimuthal :math:`Q_\phi` parameter scaled by the de-projected squared separation :math:`r^2`.
-- :file:`r.fits`: De-projected separation :math:`r`.
-- :file:`U_phi.fits`: Azimuthal Stokes :math:`U_\phi = + Q_\mathrm{IPS} \sin 2\phi - U_\mathrm{IPS} \cos 2\phi` parameter.
-
+- :file:`PI.fits`: Polarised intensity :math:`PI = \sqrt{Q^2 + U^2}`. [``PI``, ``PI_R2``, ``PI_IPS``, ``PI_IPS_R2``, ``PI_CTC_IPS``, ``PI_CTC_IPS_R2``]
+- :file:`Q_phi.fits`: Azimuthal Stokes parameter :math:`Q_\phi = - Q \cos 2\phi - U \sin 2\phi`. [``Q_PHI``, ``Q_PHI_R2``, ``Q_PHI_IPS``, ``Q_PHI_IPS_R2``, ``Q_PHI_CTC_IPS``, ``Q_PHI_CTC_IPS_R2``, ``Q_PHI_UPC_CTC_IPS``, ``Q_PHI_UPC_CTC_IPS_R2``]
+- :file:`U_phi.fits`: Azimuthal Stokes parameter :math:`U_\phi = + Q \sin 2\phi - U \cos 2\phi`. [``U_PHI``, ``U_PHI_R2``, ``U_PHI_IPS``, ``U_PHI_IPS_R2``, ``U_PHI_CTC_IPS``, ``U_PHI_CTC_IPS_R2``, ``U_PHI_UPC_CTC_IPS``, ``U_PHI_UPC_CTC_IPS_R2``]
 
 Instrument configurations
 -------------------------
