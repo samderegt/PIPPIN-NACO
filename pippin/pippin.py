@@ -1846,7 +1846,6 @@ def double_difference(ind_I, ind_QU, mask_beams, StokesPara):
     # Stokes Q parameters
     Q_frames, I_Q_frames = double_difference_QU(Q_frames, I_Q_frames, 'Q',
                                                 mask_Qmin, mask_Qplus)
-    print(ind_QU.shape)
     # Stokes U parameters
     U_frames, I_U_frames = double_difference_QU(U_frames, I_U_frames, 'U',
                                                 mask_Umin, mask_Uplus)
@@ -2419,12 +2418,8 @@ def save_PDI_frames(type, frames, mask_beams, HWP_used,
 
             # Move the pixel-axis to the first axis
             im_to_save = frames[key]
-            print(key, im_to_save.shape)
             if (im_to_save.ndim == 3) or key.startswith('cube_'):
                 im_to_save = np.moveaxis(im_to_save, 0, -1)
-
-            print(mask_beams.shape, im_to_save.shape)
-            print()
 
             # Reshape the array to form an image
             new_shape      = (*mask_beams.shape, *im_to_save.shape[1:])
