@@ -1,9 +1,9 @@
 #import os
 import argparse, configparser
-from .pippin import run_pipeline
-from .pippin import prepare_calib_files
-from .pippin import run_example
-from .pippin import download_data
+from .pippin_naco import run_pipeline
+from .pippin_naco import prepare_calib_files
+from .pippin_naco import run_example
+from .pippin_naco import download_data
 
 from pathlib import Path
 import warnings
@@ -14,9 +14,9 @@ def main(args=None):
     path_cwd = Path.cwd()
 
     # Default master FLATs, BPMs, and DARKs directories
-    path_FLAT_dir = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin/data/master_FLAT/'
-    path_BPM_dir  = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin/data/master_BPM/'
-    path_DARK_dir = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin/data/master_DARK/'
+    path_FLAT_dir = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin_naco/data/master_FLAT/'
+    path_BPM_dir  = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin_naco/data/master_BPM/'
+    path_DARK_dir = '/home/sam/Documents/PIPPIN_reduction/PIPPIN-NACO/pippin_naco/data/master_DARK/'
 
     # All arguments to expect
     parser = argparse.ArgumentParser()

@@ -8,7 +8,7 @@ from astropy.modeling import models, fitting
 from tqdm import tqdm
 from pathlib import Path
 
-import pippin.auxiliary_functions as af
+import pippin_naco.auxiliary_functions as af
 
 # Setting the length of progress bars
 pbar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'

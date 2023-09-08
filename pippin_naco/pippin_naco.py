@@ -33,10 +33,10 @@ import datetime
 import warnings
 import sys
 
-import pippin.auxiliary_functions as af
-import pippin.figures as figs
-import pippin.beam_fitting as beam
-import pippin.sky_subtraction as sky
+import pippin_naco.auxiliary_functions as af
+import pippin_naco.figures as figs
+import pippin_naco.beam_fitting as beam
+import pippin_naco.sky_subtraction as sky
 
 # Setting the length of progress bars
 pbar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
@@ -706,7 +706,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         '''
         ############
-        path_FLAT_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_FLAT', f'master_FLAT_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
+        path_FLAT_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin_naco/data/master_FLAT', f'master_FLAT_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_FLAT_file_i,
                      master_FLATs_lamp_on[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
@@ -721,7 +721,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         '''
         ############
-        path_BPM_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_BPM', f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
+        path_BPM_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin_naco/data/master_BPM', f'master_BPM_{camera_i}_{filter_i}{OPTI1_ID_i}_NACO.{master_FLATs_lamp_on_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_BPM_file_i, master_BPMs[i].astype(np.float32),
                      output_verify='silentfix', overwrite=True)
         ############
@@ -740,7 +740,7 @@ def prepare_calib_files(path_SCIENCE_dir, path_FLAT_dir, path_master_BPM_dir,
 
         '''
         ############
-        path_DARK_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin/data/master_DARK', f'master_DARK_{camera_i}_NACO.{master_DARKs_header[i]["DATE-OBS"]}.fits')
+        path_DARK_file_i = Path('/home/sam/Documents/Master-2/MRP/PIPPIN-NACO/pippin_naco/data/master_DARK', f'master_DARK_{camera_i}_NACO.{master_DARKs_header[i]["DATE-OBS"]}.fits')
         fits.writeto(path_DARK_file_i, master_DARKs[i].astype(np.float32),
                      header=master_DARKs_header[i], output_verify='silentfix', overwrite=True)
         ############
@@ -2992,7 +2992,7 @@ def run_example(path_cwd):
             if not path_DARK_dir.is_dir():
                 path_DARK_dir.mkdir()
 
-            download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin/example_HD_135344B/'
+            download_url = 'https://github.com/samderegt/PIPPIN-NACO/raw/master/pippin_naco/example_HD_135344B/'
 
             for file_i in tqdm(files_to_download, bar_format=pbar_format):
                 # Download the data from the git

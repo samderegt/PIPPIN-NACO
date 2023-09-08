@@ -10,7 +10,7 @@ from pathlib import Path
 from tqdm import tqdm
 from astropy.io import fits
 
-import pippin.auxiliary_functions as af
+import pippin_naco.auxiliary_functions as af
 
 # Setting the length of progress bars
 pbar_format = '{l_bar}{bar:20}{r_bar}{bar:-20b}'
