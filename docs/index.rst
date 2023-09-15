@@ -13,7 +13,7 @@ To reduce polarimetric NACO data, the user can specify a limited number of input
 
 *Examples of NACO observations reduced with PIPPIN.*
 
-A comprehensive archive of the PIPPIN-reduced NACO data products can be found at **archive**. There, we have published our reductions of potential young systems observed with any of NACO's polarimetric configurations **paper-citation**. These data include multi-wavelength and multi-epoch observations.
+A comprehensive archive of the PIPPIN-reduced NACO data products can be found on `Zenodo <https://doi.org/10.5281/zenodo.8348803>`_. There, we have published our reductions of potential young systems observed with any of NACO's polarimetric configurations **paper-citation**. These data include multi-wavelength and multi-epoch observations.
 
 .. note::
    If you use PIPPIN or PIPPIN-reduced data products from the archive for your publication, please :ref:`cite our paper <Citing PIPPIN>`.

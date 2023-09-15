@@ -6,7 +6,7 @@ PIPPIN
 
 Documentation can be found at https://pippin-naco.readthedocs.io
 
-A comprehensive archive of the PIPPIN-reduced NACO data products can be found at **archive**. There, we have published our reductions of potential young systems observed with NACO's polarimetric configuration **paper-citation**.
+A comprehensive archive of the PIPPIN-reduced NACO data products can be found on `Zenodo <https://doi.org/10.5281/zenodo.8348803>`_. There, we have published our reductions of potential young systems observed with NACO's polarimetric configuration **paper-citation**. 
 
 If you use PIPPIN or PIPPIN-reduced data products from the archive for your publication, please **cite our paper**.
 
