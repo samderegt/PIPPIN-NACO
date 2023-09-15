@@ -10,6 +10,6 @@ A comprehensive archive of the PIPPIN-reduced NACO data products can be found at
 
 If you use PIPPIN or PIPPIN-reduced data products from the archive for your publication, please **cite our paper**.
 
-PIPPIN is distributed under the GNU General Public License v3 (`LICENSE <https://github.com/samderegt/PIPPIN-NACO/LICENSE>`_).
+PIPPIN is distributed under the MIT License (for terms and conditions, see `LICENSE <https://github.com/samderegt/PIPPIN-NACO/blob/master/LICENSE>`_).
 
 Copyright (C) 2023 Sam de Regt

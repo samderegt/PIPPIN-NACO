@@ -15,7 +15,7 @@ setuptools.setup(
     packages=['pippin_naco'],
     url='https://pippin-naco.readthedocs.io', 
     python_requires='>=3.10',
-    license='GNU General Public License v3.0', 
+    license='MIT', 
     description='A comprehensive PDI pipeline for NACO data (PIPPIN)', 
     long_description=long_description, 
     install_requires=[
@@ -30,7 +30,7 @@ setuptools.setup(
     classifiers=[
         'Development Status :: 3 - Alpha', 
         'Intended Audience :: Science/Research', 
-        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)', 
+        'License :: OSI Approved :: MIT License', 
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3.10', 
         'Topic :: Scientific/Engineering :: Astronomy', 
