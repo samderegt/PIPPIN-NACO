@@ -2,7 +2,7 @@
 Installation
 ============
 
-PIPPIN is available via `PyPi <https://pypi.org/project/pippin-naco/>`_ and can be installed as:
+PIPPIN is available via `PyPI <https://pypi.org/project/pippin-naco/>`_ and can be installed as:
 ::
     pip install pippin-naco
 
