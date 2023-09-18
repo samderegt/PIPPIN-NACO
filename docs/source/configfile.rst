@@ -4,8 +4,7 @@ Configuration file
 
 The default configuration file is given below:
 
-.. code-block:: language
-   :linenos:
+::
 
    [Pre-processing options]
 
