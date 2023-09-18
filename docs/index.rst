@@ -29,5 +29,4 @@ Contents
    ./source/example
    ./source/usage
    ./source/configfile
-   ./source/citing
    GitHub <https://github.com/samderegt/PIPPIN-NACO>
