@@ -8,7 +8,7 @@ BibTeX citation of `Zenodo archive <https://doi.org/10.5281/zenodo.8348803>`_:
 
 .. code-block:: bib
 
-    @dataset{de_regt_sam_2023_8348804,
+    @DATASET{de_regt_sam_2023_8348804,
         author       = {de Regt, Sam and
                         Ginski, Christian and
                         Kenworthy, Matthew},
@@ -25,4 +25,9 @@ BibTeX citation of **de Regt et al. (2023)**:
 
 .. code-block:: bib
 
-    ...
+    @ARTICLE{de_Regt_ea_2023,
+        author       = {de Regt, Sam and
+                        Ginski, Christian and
+                        Kenworthy, Matthew},
+        title        = {Polarimetric Differential Imaging with VLT/NACO},
+    }
